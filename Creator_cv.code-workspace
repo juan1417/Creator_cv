@@ -1,0 +1,13 @@
+{
+  "folders": [
+    {
+      "name": "Creator_cv",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "git.openRepositoryInParentFolders": "never",
+    "git.detectSubmodules": false,
+    "git.autoRepositoryDetection": false
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "git.openRepositoryInParentFolders": "never",
+  "git.detectSubmodules": false,
+  "git.autoRepositoryDetection": false
+}
