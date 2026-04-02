@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Entrevista MCP · {{ cv.title }}{% endblock %}
+{% block body %}
+  <p class="breadcrumb">
+    <a href="{{ url_for('main.index') }}">Inicio</a> /
+    <a href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">Editor</a> /
+    Entrevista MCP
+  </p>
+
+  <h1>Entrevista vía MCP</h1>
+  <p class="lede">
+    La <strong>pregunta</strong> la define la IA en Cursor escribiendo
+    <code>cv-interview.pending.json</code> (Filesystem MCP sobre
+    <code>mcp-ia-preguntas/context</code>). Aquí se renderiza en HTML, guardas la respuesta en el
+    contexto y se va acumulando la <a href="{{ url_for('main.cv_review', cv_id=cv.id) }}">revisión Markdown</a>.
+  </p>
+  <p class="help">Pendiente (MCP): <code>{{ mcp_interview_pending_path }}</code> · Plantilla: <code>{{ template_path }}</code> · Revisión en disco: <code>{{ review_path }}</code></p>
+
+  {% if idle %}
+    <section class="card callout" role="status">
+      <h2 class="h3">Esperando pregunta del MCP</h2>
+      <p>No existe <code>cv-interview.pending.json</code> o está vacío (o el archivo no es JSON válido).</p>
+      <ol>
+        <li>En Cursor, pide a la IA que cree la siguiente pregunta según <code>cv-interview.pending.template.json</code>.</li>
+        <li>La IA debe escribir el JSON en la ruta anterior (misma carpeta que <code>cv-context.active.json</code>).</li>
+        <li>Recarga esta página.</li>
+      </ol>
+      <p class="help interview-mcp-seed-help">
+        <strong>Sin MCP aún:</strong> puedes generar la <em>primera</em> pregunta de ejemplo (idioma y objetivo del CV) copiando la plantilla del repo al archivo pending.
+      </p>
+      <form method="post" action="{{ url_for('main.cv_interview_mcp_seed_template', cv_id=cv.id) }}" class="form-actions interview-mcp-seed-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button type="submit" class="btn btn-secondary">Crear pending desde plantilla (primera ronda)</button>
+      </form>
+    </section>
+  {% elif pending_error %}
+    <section class="card flash-error" role="alert">
+      <h2 class="h3">pending.json inválido o ilegible</h2>
+      <p>{{ pending_error }}</p>
+      <p class="help">Corrige el archivo con la IA o edítalo a mano usando <code>cv-interview.pending.template.json</code>. Si el JSON está corrupto u olvidaste borrarlo, elimina manualmente <code>{{ mcp_interview_pending_path }}</code> y recarga; después podrás usar «Crear pending desde plantilla».</p>
+    </section>
+  {% else %}
+    <div class="interview-mcp-layout">
+      <section class="card interview-question-card" aria-labelledby="qh">
+        <h2 id="qh" class="h3">Pregunta</h2>
+        <div class="markdown-body">{{ question_html_safe|safe }}</div>
+      </section>
+
+      <section class="card">
+        <h2 class="h3">Tu respuesta</h2>
+        <form method="post" action="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}" class="form-stack">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          {% for field in pending.inputs %}
+            <div class="field-group">
+              <label for="inp-{{ field.name }}">{{ field.label }}{% if field.required %} <span class="meta-muted">(obligatorio)</span>{% endif %}</label>
+              {% if field.type == "text" %}
+                <input id="inp-{{ field.name }}" class="text-input" type="text" name="{{ field.name }}" autocomplete="off" />
+              {% else %}
+                <textarea id="inp-{{ field.name }}" class="code-area" name="{{ field.name }}" rows="5"></textarea>
+              {% endif %}
+            </div>
+          {% endfor %}
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Guardar en contexto y revisión</button>
+          </div>
+          <p class="help">Al guardar, el archivo pending se elimina: la IA debe generar la siguiente ronda en Cursor.</p>
+        </form>
+      </section>
+    </div>
+  {% endif %}
+{% endblock %}

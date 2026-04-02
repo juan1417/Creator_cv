@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Asistente · {{ cv.title }}{% endblock %}
+{% block body %}
+  <p class="breadcrumb">
+    <a href="{{ url_for('main.index') }}">Inicio</a> /
+    <a href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">Editor</a> /
+    Asistente
+  </p>
+
+  <p class="interview-progress" role="status">
+    Paso <strong>{{ step_num }}</strong> de {{ step_total }}
+    — <span class="meta-muted">{{ step_title }}</span>
+  </p>
+
+  <h1>{{ step_title }}</h1>
+
+  {% if lede %}
+    <p class="lede">{{ lede }}</p>
+  {% endif %}
+
+  {% for q in questions %}
+    <p class="interview-question">{{ q }}</p>
+  {% endfor %}
+
+  {% if show_finish %}
+    <div class="card form-stack">
+      <p><a class="btn btn-primary" href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">Ir al editor JSON</a></p>
+      <p><a class="btn btn-secondary" href="{{ url_for('main.cv_preview', cv_id=cv.id) }}">Vista previa</a></p>
+      <p class="help">Para añadir otra experiencia o proyecto, puedes volver a ese paso:</p>
+      <p class="interview-jump-links">
+        <a href="{{ url_for('main.cv_interview', cv_id=cv.id, step='experiencia') }}">Experiencia</a>
+        ·
+        <a href="{{ url_for('main.cv_interview', cv_id=cv.id, step='educacion') }}">Educación</a>
+        ·
+        <a href="{{ url_for('main.cv_interview', cv_id=cv.id, step='proyectos') }}">Proyectos</a>
+      </p>
+    </div>
+  {% else %}
+    <form method="post" action="{{ url_for('main.cv_interview', cv_id=cv.id) }}" class="card form-stack interview-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <input type="hidden" name="step" value="{{ step_id }}" />
+
+      {% if prev_step %}
+        <p class="interview-back meta-muted">
+          <a href="{{ url_for('main.cv_interview', cv_id=cv.id, step=prev_step) }}">← Paso anterior</a>
+          (no deshace lo ya guardado; solo navegación)
+        </p>
+      {% endif %}
+
+      {% for field in fields %}
+        <div class="field-group">
+          {% if field.type == "checkbox" %}
+            <label class="checkbox-label">
+              <input
+                type="checkbox"
+                name="{{ field.name }}"
+                value="1"
+                {% if field.value %}checked{% endif %}
+              />
+              {{ field.label }}
+            </label>
+            {% if field.hint %}<p class="help">{{ field.hint }}</p>{% endif %}
+          {% else %}
+            <label for="f-{{ field.name }}">{{ field.label }}</label>
+            {% if field.hint %}<p class="help">{{ field.hint }}</p>{% endif %}
+            {% if field.type == "textarea" %}
+              <textarea id="f-{{ field.name }}" name="{{ field.name }}" rows="5" class="code-area">{{ field.value }}</textarea>
+            {% else %}
+              <input id="f-{{ field.name }}" type="text" name="{{ field.name }}" value="{{ field.value }}" class="text-input" autocomplete="off" />
+            {% endif %}
+          {% endif %}
+        </div>
+      {% endfor %}
+
+      <div class="form-actions interview-actions">
+        {% if only_continue %}
+          <button type="submit" name="action" value="next" class="btn btn-primary">Empezar</button>
+        {% else %}
+          <button type="submit" name="action" value="next" class="btn btn-primary">Guardar y continuar</button>
+          {% if allow_skip %}
+            <button type="submit" name="action" value="skip" class="btn btn-secondary" formnovalidate>Saltar este paso</button>
+          {% endif %}
+        {% endif %}
+      </div>
+    </form>
+  {% endif %}
+{% endblock %}

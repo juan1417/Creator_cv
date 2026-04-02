@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block main_classes %}main-content main-content--doc-preview{% endblock %}
+{% block title %}Vista previa · {{ cv.title }}{% endblock %}
+{% block body %}
+  <p class="breadcrumb preview-doc-breadcrumb">
+    <a href="{{ url_for('main.index') }}">Inicio</a> /
+    <a href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">Editor</a> /
+    Vista previa
+  </p>
+  <h1 class="preview-doc-title">Vista previa</h1>
+  <p class="help preview-doc-help">Vista previa en <strong>dos columnas</strong> (cabecera + barra lateral + cuerpo), alineada a un CV moderno tipo referencia. Los campos opcionales <code>meta.nombre_completo</code>, <code>meta.titulo_profesional</code>, <code>meta.contacto</code>, <code>certificaciones</code> y <code>fortalezas</code> en el JSON completan cabecera y columna izquierda. La exportación PDF/DOCX sigue usando Markdown.</p>
+
+  <div class="preview-doc-stage" aria-label="Vista previa del CV">
+    <div class="cv-paper">
+      <div class="cv-paper-inner cv-ref-doc">
+        {% if preview_empty %}
+          <p class="cv-preview-empty">Ahora mismo no hay texto que mostrar: el contexto JSON está vacío o todos los campos van sin contenido.</p>
+          <p class="cv-preview-hint">Completa datos en el <a href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">editor</a>, usa el <a href="{{ url_for('main.cv_interview', cv_id=cv.id) }}">asistente local</a> o <a href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">entrevista MCP</a>, y vuelve a abrir la vista previa.</p>
+        {% else %}
+          {{ preview_html|safe }}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <details class="preview-raw-markdown card">
+    <summary>Fuente Markdown</summary>
+    <pre class="preview-pre">{% if markdown.strip() %}{{ markdown }}{% else %}(vacío){% endif %}</pre>
+  </details>
+{% endblock %}

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Creator CV{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="{{ url_for('main.index') }}">Creator CV</a>
+      <nav class="nav" aria-label="Principal">
+        <a href="{{ url_for('main.index') }}">Inicio</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="{% block main_classes %}wrap main-content{% endblock %}">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flash-list" role="status">
+          {% for category, message in messages %}
+            <li class="flash flash-{{ category }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    {% block body %}{% endblock %}
+  </main>
+
+  <footer class="site-footer wrap">
+    <p class="meta-muted">Contexto MCP: <code>{{ mcp_context_path }}</code></p>
+    <p class="meta-muted">Pregunta pendiente: <code>{{ mcp_interview_pending_path }}</code> · Revisión por CV: <code>mcp-ia-preguntas/context/cv-review-cv&lt;id&gt;.active.md</code> (o <code>CREATOR_CV_REVIEW_PATH</code> con <code>{id}</code>)</p>
+  </footer>
+</body>
+</html>

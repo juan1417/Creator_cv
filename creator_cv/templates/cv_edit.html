@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ cv.title }} · Editor{% endblock %}
+{% block body %}
+  <p class="breadcrumb"><a href="{{ url_for('main.index') }}">Inicio</a> / Editor</p>
+  <h1>{{ cv.title or "Sin título" }}</h1>
+
+  <div class="toolbar" role="group" aria-label="Acciones del CV">
+    <a class="btn btn-primary" href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">Entrevista MCP</a>
+    <a class="btn btn-secondary" href="{{ url_for('main.cv_review', cv_id=cv.id) }}">Revisión Markdown</a>
+    <a class="btn btn-secondary" href="{{ url_for('main.cv_interview', cv_id=cv.id) }}">Asistente local</a>
+    <form method="post" action="{{ url_for('main.cv_sync_from_mcp', cv_id=cv.id) }}" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <button type="submit" class="btn btn-secondary">Importar desde archivo MCP</button>
+    </form>
+    <form method="post" action="{{ url_for('main.cv_sync_to_mcp', cv_id=cv.id) }}" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <button type="submit" class="btn btn-secondary">Exportar al archivo MCP</button>
+    </form>
+    <a class="btn btn-secondary" href="{{ url_for('main.cv_preview', cv_id=cv.id) }}">Vista previa</a>
+    <div class="export-group" role="group" aria-label="Descargas">
+      <a class="btn btn-ghost" href="{{ url_for('main.cv_export_md', cv_id=cv.id) }}">Descargar .md</a>
+      <a class="btn btn-ghost" href="{{ url_for('main.cv_export_pdf', cv_id=cv.id) }}">Descargar PDF</a>
+      <a class="btn btn-ghost" href="{{ url_for('main.cv_export_docx', cv_id=cv.id) }}">Descargar DOCX</a>
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('main.cv_edit', cv_id=cv.id) }}" class="card form-stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    <label for="context_json"><strong>Contexto JSON</strong> (esquema <code>mcp-ia-preguntas</code>)</label>
+    <p class="help">Debe incluir todas las claves de nivel superior del template; solo se formatea lo que guardes (sin datos inventados).</p>
+    <textarea id="context_json" name="context_json" rows="28" spellcheck="false" class="code-area">{{ context_text }}</textarea>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Guardar en base de datos</button>
+    </div>
+  </form>
+{% endblock %}

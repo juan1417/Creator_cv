@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "cv_id": null,
+  "question_markdown": "## Ejemplo\n\n¿En qué **idioma** quieres el CV y qué **objetivo** priorizamos (rol, industria)?",
+  "review_heading": "",
+  "inputs": [
+    {
+      "name": "idioma",
+      "label": "Idioma del CV",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "objetivo",
+      "label": "Objetivo principal",
+      "type": "textarea",
+      "required": true
+    }
+  ],
+  "merge": {
+    "type": "assign_paths",
+    "assignments": [
+      { "input": "idioma", "path": "meta.idioma_cv" },
+      { "input": "objetivo", "path": "meta.objetivo_cv" }
+    ]
+  },
+  "review_append": {
+    "markdown": "### Idioma y objetivo\n\n- **Idioma:** {idioma}\n- **Objetivo:** {objetivo}\n"
+  }
+}
