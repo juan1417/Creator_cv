@@ -1,7 +1,8 @@
 """
 Entrevista impulsada por archivo JSON que la IA escribe vía MCP (Filesystem).
 
-La IA coloca la siguiente pregunta y reglas de merge en `cv-interview.pending.json`;
+La IA coloca la siguiente pregunta y reglas de merge en un archivo **por CV**:
+`cv-interview.cv<id>.pending.json` (evita cruces al tener varios CVs).
 esta app renderiza el Markdown, aplica respuestas al contexto CV y acumula review.md.
 """
 
@@ -21,7 +22,7 @@ from creator_cv.context_sync import EXPECTED_TOP_KEYS, validate_context_shape
 _PKG_DIR = Path(__file__).resolve().parent
 _ROOT = _PKG_DIR.parent
 
-PENDING_REL = Path("mcp-ia-preguntas/context/cv-interview.pending.json")
+PENDING_BASENAME_FMT = "cv-interview.cv{id}.pending.json"
 REVIEW_REL_PATTERN = "cv-review-cv{id}.active.md"
 
 # Tras guardar una respuesta evitamos auto-crear la primera ronda otra vez en el siguiente GET.
@@ -51,11 +52,35 @@ def _answers_to_comma_list(val: str) -> list[str]:
     return parts
 
 
-def get_pending_interview_path(app: Flask) -> Path:
+def get_pending_interview_path(app: Flask, cv_id: int) -> Path:
+    """
+    Ruta del JSON de ronda activa para un CV concreto (un archivo por id).
+
+    - Sin variable de entorno: ``mcp-ia-preguntas/context/cv-interview.cv{id}.pending.json``.
+    - ``CREATOR_CV_INTERVIEW_PENDING_PATH`` con ``{id}``: se sustituye el id del CV.
+    - Si apunta a un **directorio** (o termina en /): ``<dir>/cv-interview.cv{id}.pending.json``.
+    - Si apunta a un **.json** sin ``{id}`` (compat. antigua): mismo directorio y nombre por CV.
+    """
+    if cv_id < 1:
+        raise ValueError("cv_id debe ser >= 1")
     raw = app.config.get("CREATOR_CV_INTERVIEW_PENDING_PATH")
-    if raw:
-        return Path(str(raw)).expanduser().resolve()
-    return _ROOT / PENDING_REL
+    basename = PENDING_BASENAME_FMT.format(id=cv_id)
+    if not raw:
+        return (_ROOT / "mcp-ia-preguntas/context" / basename).resolve()
+    s = str(raw).strip()
+    if "{id}" in s:
+        return Path(s.replace("{id}", str(cv_id))).expanduser().resolve()
+    p = Path(s).expanduser()
+    if p.is_dir() or s.endswith(("/", "\\")):
+        return (p / basename).resolve()
+    if p.suffix.lower() == ".json":
+        return (p.parent / basename).resolve()
+    return p.resolve()
+
+
+def interview_pending_parent_dir(app: Flask) -> Path:
+    """Directorio base donde se guardan los pending (referencia pie de página)."""
+    return get_pending_interview_path(app, 1).parent
 
 
 def get_review_markdown_path(app: Flask, cv_id: int) -> Path:
@@ -336,7 +361,7 @@ def remove_pending_file(path: Path) -> None:
 
 def seed_pending_from_template(path: Path, cv_id: int) -> dict[str, Any]:
     """
-    Crea cv-interview.pending.json copiando la plantilla del repo y fijando cv_id.
+    Crea el archivo pending de este CV copiando la plantilla del repo y fijando cv_id.
     Útil cuando aún no hay MCP o quien entrevista quiere arrancar la primera ronda en local.
     """
     tpl = pending_template_path()

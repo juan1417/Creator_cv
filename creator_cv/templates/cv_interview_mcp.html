@@ -14,8 +14,8 @@
     <p class="lede page-section__lede">
       Respondes en el navegador; la app <strong>fusiona</strong> tus respuestas en el JSON del CV y en la
       <a href="{{ url_for('main.cv_review', cv_id=cv.id) }}">revisión Markdown</a>.
-      Las preguntas las prepara un archivo <code>cv-interview.pending.json</code> en tu carpeta <code>context</code>
-      (normalmente desde Cursor con el MCP de archivos, o con el botón de plantilla más abajo).
+      Cada CV tiene su propio archivo de ronda, p. ej. <code>{{ pending_basename }}</code> en <code>context</code>
+      (Cursor con MCP de archivos, o el botón de plantilla). Así un CV nuevo no choca con el pending de otro.
     </p>
   </section>
 
@@ -24,7 +24,7 @@
     <dl class="path-dl">
       <div>
         <dt>Pendiente (pregunta actual)</dt>
-        <dd><code>{{ mcp_interview_pending_path }}</code></dd>
+        <dd><code>{{ pending_path_resolved }}</code></dd>
       </div>
       <div>
         <dt>Plantilla base</dt>
@@ -55,7 +55,7 @@
       <strong>No llama a la API de Gemini.</strong>
       La clave <code>GEMINI_API_KEY</code> en <code>.env</code> sirve al servidor MCP
       <code>creator_cv.mcp.gemini_server</code> en Cursor (herramienta <code>gemini_generate</code>).
-      Eso no crea solo el <code>pending.json</code>: hace falta que la IA o tú <strong>escribáis</strong> el archivo en
+      Eso no crea solo el JSON de ronda: hace falta que la IA o tú <strong>escribáis</strong> <code>{{ pending_basename }}</code> en
       <code>context</code> (p. ej. con Filesystem MCP), o usar el botón que copia la plantilla con Python (sin lanzar MCP).
     </p>
   </details>
@@ -64,12 +64,12 @@
     <section class="card callout page-section" role="status">
       <h2 class="h3">Sin pregunta pendiente</h2>
       <p>
-        En la ruta de arriba <strong>no existe</strong> <code>cv-interview.pending.json</code>
+        En la ruta de arriba <strong>no existe</strong> <code>{{ pending_basename }}</code>
         (o Flask no puede verlo). Si el JSON fuera inválido, verías el mensaje de error de “pending inválido”, no esta pantalla.
       </p>
       <ol class="mcp-steps">
         <li>En Cursor, pide que se cree la siguiente pregunta según <code>cv-interview.pending.template.json</code>.</li>
-        <li>El archivo debe guardarse en la misma carpeta que <code>cv-context.active.json</code>.</li>
+        <li>Guárdalo exactamente como <code>{{ pending_basename }}</code> (este CV es id {{ cv.id }}).</li>
         <li>Recarga esta página.</li>
       </ol>
       <section class="mcp-seed-block" aria-labelledby="mcp-seed-title">
@@ -88,7 +88,7 @@
     <section class="card flash-error page-section" role="alert">
       <h2 class="h3">pending.json inválido o ilegible</h2>
       <p>{{ pending_error }}</p>
-      <p class="help">Corrige el archivo con la IA o a mano usando la plantilla. Si hace falta, borra manualmente <code>{{ mcp_interview_pending_path }}</code> y recarga; luego puedes usar «Escribir pending desde plantilla».</p>
+      <p class="help">Corrige el archivo con la IA o a mano usando la plantilla. Si hace falta, borra manualmente <code>{{ pending_path_resolved }}</code> y recarga; luego puedes usar «Escribir pending desde plantilla».</p>
     </section>
   {% else %}
     <section class="card page-section" aria-labelledby="mcp-active-h">

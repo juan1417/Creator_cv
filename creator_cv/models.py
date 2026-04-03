@@ -40,6 +40,7 @@ class CV(db.Model):
     title: Mapped[str] = mapped_column(String(255), default="")
     context_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
+    chat_history_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now
     )

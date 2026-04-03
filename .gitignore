@@ -3,7 +3,7 @@
 
 # Contexto de CV con datos personales (MCP IA Preguntas)
 mcp-ia-preguntas/context/cv-context.active.json
-mcp-ia-preguntas/context/cv-interview.pending.json
+mcp-ia-preguntas/context/cv-interview*.pending.json
 mcp-ia-preguntas/context/cv-review-cv*.active.md
 
 # Python / uv
