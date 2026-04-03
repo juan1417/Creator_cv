@@ -8,6 +8,7 @@ import re
 from typing import Any
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 CAPACITY_INSTRUCTIONS: dict[str, str] = {
@@ -41,6 +42,48 @@ def _client() -> genai.Client:
 
 def _model_id() -> str:
     return (os.environ.get("GEMINI_MODEL") or "gemini-2.0-flash").strip()
+
+
+def _model_candidates() -> list[str]:
+    """Orden: modelo principal + GEMINI_MODEL_FALLBACKS (para 429 por cuota en un modelo)."""
+    primary = _model_id()
+    raw = os.environ.get(
+        "GEMINI_MODEL_FALLBACKS",
+        "gemini-2.5-flash,gemini-1.5-flash",
+    )
+    out: list[str] = [primary]
+    for part in raw.split(","):
+        p = part.strip()
+        if p and p not in out:
+            out.append(p)
+    return out
+
+
+def friendly_api_error(exc: Exception) -> str:
+    """Mensaje corto para mostrar en la web (sin volcar el JSON completo de Google)."""
+    if isinstance(exc, genai_errors.ClientError):
+        code = getattr(exc, "code", None)
+        msg = (getattr(exc, "message", None) or str(exc))[:500]
+        if code == 429:
+            return (
+                "Cuota o límite de velocidad de Gemini (429). Suele deberse al plan gratuito "
+                "agotado para ese modelo o a demasiadas peticiones seguidas. "
+                "Prueba: esperar 1–2 minutos; en .env cambia GEMINI_MODEL "
+                "(p. ej. gemini-2.5-flash o gemini-1.5-flash); revisa "
+                "https://ai.google.dev/gemini-api/docs/rate-limits y el uso en Google AI Studio."
+            )
+        if code in (401, 403):
+            return (
+                "La clave GEMINI_API_KEY no es válida o no tiene permiso (401/403). "
+                "Genera una nueva en https://aistudio.google.com/apikey"
+            )
+        if code == 404:
+            return (
+                f"Modelo no disponible con tu clave o nombre incorrecto: {msg}. "
+                "Ajusta GEMINI_MODEL en .env."
+            )
+        return f"Error de la API Gemini ({code}): {msg}"
+    return f"Error del modelo: {exc}"
 
 
 def summarize_cv_for_prompt(data: dict[str, Any], max_chars: int = 7000) -> str:
@@ -133,11 +176,27 @@ def run_chat_turn(
         system_instruction=system,
         temperature=0.55,
     )
-    resp = client.models.generate_content(
-        model=_model_id(),
-        contents=prompt,
-        config=cfg,
-    )
+    candidates = _model_candidates()
+    resp = None
+    last_err: Exception | None = None
+    for mid in candidates:
+        try:
+            resp = client.models.generate_content(
+                model=mid,
+                contents=prompt,
+                config=cfg,
+            )
+            break
+        except genai_errors.APIError as e:
+            last_err = e
+            code = getattr(e, "code", 0)
+            if code == 429 and mid != candidates[-1]:
+                continue
+            raise RuntimeError(friendly_api_error(e)) from e
+    if resp is None:
+        raise RuntimeError(
+            friendly_api_error(last_err) if last_err else "Sin respuesta del modelo."
+        )
     raw_text = getattr(resp, "text", None) or ""
     if not raw_text.strip() and resp.candidates:
         chunks: list[str] = []
