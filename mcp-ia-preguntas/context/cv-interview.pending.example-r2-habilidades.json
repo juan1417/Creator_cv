@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "cv_id": null,
+  "question_markdown": "## Habilidades y stack\n\nLista **tecnologías separadas por comas** (lenguajes, frameworks, BD, nube). Las **blandas** e **idiomas** también por comas. No inventes: solo lo que confirme la persona.\n\nSi antes guardó tecnologías en `perfil_profesional.palabras_clave`, puedes pedirle que las reordene aquí y deje el resumen solo como texto en primera persona.",
+  "review_heading": "Habilidades",
+  "inputs": [
+    {
+      "name": "tecnicas",
+      "label": "Técnicas (comas)",
+      "type": "textarea",
+      "required": false
+    },
+    {
+      "name": "blandas",
+      "label": "Blandas (comas)",
+      "type": "textarea",
+      "required": false
+    },
+    {
+      "name": "idiomas",
+      "label": "Idiomas (comas)",
+      "type": "textarea",
+      "required": false
+    }
+  ],
+  "merge": {
+    "type": "assign_paths",
+    "assignments": [
+      { "input": "tecnicas", "path": "habilidades.tecnicas" },
+      { "input": "blandas", "path": "habilidades.blandas" },
+      { "input": "idiomas", "path": "habilidades.idiomas" }
+    ]
+  },
+  "review_append": {
+    "markdown": "### Habilidades\n\n- **Técnicas:** {tecnicas}\n- **Blandas:** {blandas}\n- **Idiomas:** {idiomas}\n"
+  }
+}

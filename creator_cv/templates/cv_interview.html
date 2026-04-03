@@ -7,26 +7,27 @@
     Asistente
   </p>
 
-  <p class="interview-progress" role="status">
-    Paso <strong>{{ step_num }}</strong> de {{ step_total }}
-    — <span class="meta-muted">{{ step_title }}</span>
+  <h1>Asistente local</h1>
+  <p class="lede interview-page-lede">
+    Formulario paso a paso: cada pantalla guarda un trozo del JSON del CV. Puedes saltar pasos o volver atrás con el enlace inferior (no borra lo ya guardado).
   </p>
 
-  <h1>{{ step_title }}</h1>
-
-  {% if lede %}
-    <p class="lede">{{ lede }}</p>
-  {% endif %}
-
-  {% for q in questions %}
-    <p class="interview-question">{{ q }}</p>
-  {% endfor %}
+  <section class="card page-section interview-progress-card" aria-labelledby="prog-h">
+    <h2 id="prog-h" class="h3">Progreso</h2>
+    <p class="interview-progress" role="status">
+      Paso <strong>{{ step_num }}</strong> de {{ step_total }}
+      — <span class="meta-muted">{{ step_title }}</span>
+    </p>
+  </section>
 
   {% if show_finish %}
-    <div class="card form-stack">
+    <section class="card form-stack page-section" aria-labelledby="finish-h">
+      <h2 id="finish-h" class="h3">Entrevista completada</h2>
+      <p class="help">El contexto ya está en el editor. Puedes seguir afinando el JSON o la vista previa.</p>
       <p><a class="btn btn-primary" href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">Ir al editor JSON</a></p>
       <p><a class="btn btn-secondary" href="{{ url_for('main.cv_preview', cv_id=cv.id) }}">Vista previa</a></p>
-      <p class="help">Para añadir otra experiencia o proyecto, puedes volver a ese paso:</p>
+      <h3 class="h3 interview-subsection-title">Añadir más bloques</h3>
+      <p class="help">Para otra experiencia, educación o proyecto, abre de nuevo ese paso:</p>
       <p class="interview-jump-links">
         <a href="{{ url_for('main.cv_interview', cv_id=cv.id, step='experiencia') }}">Experiencia</a>
         ·
@@ -34,54 +35,73 @@
         ·
         <a href="{{ url_for('main.cv_interview', cv_id=cv.id, step='proyectos') }}">Proyectos</a>
       </p>
-    </div>
+    </section>
   {% else %}
-    <form method="post" action="{{ url_for('main.cv_interview', cv_id=cv.id) }}" class="card form-stack interview-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-      <input type="hidden" name="step" value="{{ step_id }}" />
-
-      {% if prev_step %}
-        <p class="interview-back meta-muted">
-          <a href="{{ url_for('main.cv_interview', cv_id=cv.id, step=prev_step) }}">← Paso anterior</a>
-          (no deshace lo ya guardado; solo navegación)
-        </p>
+    <section class="card interview-step-card page-section" aria-labelledby="step-h">
+      <h2 id="step-h" class="h3">{{ step_title }}</h2>
+      {% if lede %}
+        <p class="lede interview-step-lede">{{ lede }}</p>
       {% endif %}
 
-      {% for field in fields %}
-        <div class="field-group">
-          {% if field.type == "checkbox" %}
-            <label class="checkbox-label">
-              <input
-                type="checkbox"
-                name="{{ field.name }}"
-                value="1"
-                {% if field.value %}checked{% endif %}
-              />
-              {{ field.label }}
-            </label>
-            {% if field.hint %}<p class="help">{{ field.hint }}</p>{% endif %}
-          {% else %}
-            <label for="f-{{ field.name }}">{{ field.label }}</label>
-            {% if field.hint %}<p class="help">{{ field.hint }}</p>{% endif %}
-            {% if field.type == "textarea" %}
-              <textarea id="f-{{ field.name }}" name="{{ field.name }}" rows="5" class="code-area">{{ field.value }}</textarea>
+      {% if questions %}
+        <div class="interview-questions-block" role="region" aria-label="Indicaciones del paso">
+          <h3 class="h3 interview-subsection-title">Qué vamos a recoger</h3>
+          {% for q in questions %}
+            <p class="interview-question">{{ q }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('main.cv_interview', cv_id=cv.id) }}" class="form-stack interview-form interview-form-inner">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <input type="hidden" name="step" value="{{ step_id }}" />
+
+        {% if prev_step %}
+          <p class="interview-back meta-muted">
+            <a href="{{ url_for('main.cv_interview', cv_id=cv.id, step=prev_step) }}">← Paso anterior</a>
+            (no deshace lo ya guardado; solo navegación)
+          </p>
+        {% endif %}
+
+        <h3 class="h3 interview-subsection-title">Tu respuesta</h3>
+
+        {% for field in fields %}
+          <div class="field-group">
+            {% if field.type == "checkbox" %}
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  name="{{ field.name }}"
+                  value="1"
+                  {% if field.value %}checked{% endif %}
+                />
+                {{ field.label }}
+              </label>
+              {% if field.hint %}<p class="help">{{ field.hint }}</p>{% endif %}
             {% else %}
-              <input id="f-{{ field.name }}" type="text" name="{{ field.name }}" value="{{ field.value }}" class="text-input" autocomplete="off" />
+              <label for="f-{{ field.name }}">{{ field.label }}</label>
+              {% if field.hint %}<p class="help">{{ field.hint }}</p>{% endif %}
+              {% if field.type == "textarea" %}
+                <textarea id="f-{{ field.name }}" name="{{ field.name }}" rows="5" class="code-area">{{ field.value }}</textarea>
+              {% else %}
+                <input id="f-{{ field.name }}" type="text" name="{{ field.name }}" value="{{ field.value }}" class="text-input" autocomplete="off" />
+              {% endif %}
+            {% endif %}
+          </div>
+        {% endfor %}
+
+        <div class="form-actions interview-actions">
+          {% if only_continue %}
+            <button type="submit" name="action" value="next" class="btn btn-primary">Empezar</button>
+          {% else %}
+            <button type="submit" name="action" value="next" class="btn btn-primary">Guardar y continuar</button>
+            {% if allow_skip %}
+              <button type="submit" name="action" value="skip" class="btn btn-secondary" formnovalidate>Saltar este paso</button>
             {% endif %}
           {% endif %}
         </div>
-      {% endfor %}
-
-      <div class="form-actions interview-actions">
-        {% if only_continue %}
-          <button type="submit" name="action" value="next" class="btn btn-primary">Empezar</button>
-        {% else %}
-          <button type="submit" name="action" value="next" class="btn btn-primary">Guardar y continuar</button>
-          {% if allow_skip %}
-            <button type="submit" name="action" value="skip" class="btn btn-secondary" formnovalidate>Saltar este paso</button>
-          {% endif %}
-        {% endif %}
-      </div>
-    </form>
+      </form>
+    </section>
   {% endif %}
 {% endblock %}
+

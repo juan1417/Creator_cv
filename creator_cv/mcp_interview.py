@@ -24,9 +24,31 @@ _ROOT = _PKG_DIR.parent
 PENDING_REL = Path("mcp-ia-preguntas/context/cv-interview.pending.json")
 REVIEW_REL_PATTERN = "cv-review-cv{id}.active.md"
 
+# Tras guardar una respuesta evitamos auto-crear la primera ronda otra vez en el siguiente GET.
+INTERVIEW_SESSION_SKIP_AUTO_PENDING_KEY = "cv_interview_skip_auto_pending"
+
 LIST_APPEND_ROOTS = frozenset(
     {"experiencia", "educacion", "proyectos", "dudas_pendientes"}
 )
+
+# assign_paths: respuestas tipo texto con comas → listas JSON en el CV
+ASSIGN_PATH_COMMA_LIST = frozenset(
+    {
+        "habilidades.tecnicas",
+        "habilidades.blandas",
+        "habilidades.idiomas",
+        "perfil_profesional.palabras_clave",
+    }
+)
+
+
+def _answers_to_comma_list(val: str) -> list[str]:
+    parts: list[str] = []
+    for chunk in val.replace("\n", ",").split(","):
+        t = chunk.strip()
+        if t:
+            parts.append(t)
+    return parts
 
 
 def get_pending_interview_path(app: Flask) -> Path:
@@ -228,7 +250,10 @@ def apply_merge(
             inp = a["input"]
             path = (a["path"] or "").strip()
             if inp in answers and path:
-                _set_dotted(data, path, answers[inp])
+                val: Any = answers[inp]
+                if path in ASSIGN_PATH_COMMA_LIST and isinstance(val, str):
+                    val = _answers_to_comma_list(val)
+                _set_dotted(data, path, val)
 
     elif mtype == "append_list_object":
         path = (merge["path"] or "").strip()
@@ -244,6 +269,15 @@ def apply_merge(
         lst = parent.get(key)
         if not isinstance(lst, list):
             lst = []
+        if path == "experiencia":
+            for ml in ("responsabilidades", "logros"):
+                v = obj.get(ml)
+                if isinstance(v, str) and v.strip():
+                    obj[ml] = [
+                        ln.strip()
+                        for ln in v.splitlines()
+                        if ln.strip()
+                    ]
         lst.append(obj)
         parent[key] = lst
 

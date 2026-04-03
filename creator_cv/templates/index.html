@@ -24,6 +24,10 @@
             <a class="meta-muted" href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">MCP</a>
             <a class="meta-muted" href="{{ url_for('main.cv_interview', cv_id=cv.id) }}">Asistente</a>
             <span class="meta-muted">actualizado {{ cv.updated_at.strftime("%Y-%m-%d %H:%M") if cv.updated_at else "" }}</span>
+            <form method="post" action="{{ url_for('main.cv_delete', cv_id=cv.id) }}" class="inline-form cv-delete-form" onsubmit="return confirm('¿Eliminar este CV? Se borrarán el contexto y las secciones asociadas. No se puede deshacer.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <button type="submit" class="btn btn-danger btn-compact">Eliminar</button>
+            </form>
           </li>
         {% endfor %}
       </ul>

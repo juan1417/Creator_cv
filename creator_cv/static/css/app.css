@@ -312,6 +312,25 @@ h2 {
   background: transparent;
 }
 
+.btn-danger {
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+  border-color: color-mix(in srgb, var(--danger-fg) 35%, var(--border));
+}
+
+.btn-danger:hover {
+  filter: brightness(0.96);
+}
+
+.btn-compact {
+  font-size: 0.85rem;
+  padding: calc(var(--space) * 0.75) calc(var(--space) * 1.5);
+}
+
+.cv-delete-form {
+  margin-left: auto;
+}
+
 .preview-pre {
   white-space: pre-wrap;
   word-break: break-word;
@@ -373,6 +392,104 @@ h2 {
 .h3 {
   font-size: 1.1rem;
   margin: 0 0 var(--space);
+}
+
+.h3-like {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.page-section__lede {
+  margin-bottom: 0;
+}
+
+.page-section__help {
+  margin-top: 0;
+}
+
+.form-stack--tight {
+  margin-top: calc(var(--space) * 2);
+}
+
+.help-details {
+  margin: calc(var(--space) * 2) 0;
+  padding: calc(var(--space) * 2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.help-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style-position: outside;
+}
+
+.help-details-list {
+  margin: var(--space) 0 0;
+  padding-left: 1.25rem;
+}
+
+.help-details-list li {
+  margin-bottom: calc(var(--space) * 0.75);
+}
+
+.path-dl {
+  margin: 0;
+}
+
+.path-dl > div {
+  margin-bottom: calc(var(--space) * 2);
+}
+
+.path-dl > div:last-child {
+  margin-bottom: 0;
+}
+
+.path-dl dt {
+  font-weight: 600;
+  margin: 0 0 calc(var(--space) * 0.5);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.path-dl dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.mcp-steps {
+  margin: calc(var(--space) * 2) 0;
+  padding-left: 1.25rem;
+}
+
+.mcp-seed-block {
+  margin-top: calc(var(--space) * 3);
+  padding-top: calc(var(--space) * 2);
+  border-top: 1px solid var(--border);
+}
+
+.interview-page-lede {
+  max-width: 40rem;
+}
+
+.interview-subsection-title {
+  margin-top: calc(var(--space) * 2);
+  margin-bottom: var(--space);
+}
+
+.interview-step-lede {
+  margin-top: 0;
+}
+
+.interview-questions-block {
+  margin-bottom: calc(var(--space) * 2);
+  padding-bottom: calc(var(--space) * 2);
+  border-bottom: 1px solid var(--border);
+}
+
+.interview-form-inner {
+  padding-top: 0;
 }
 
 .interview-mcp-layout {
@@ -647,6 +764,19 @@ h2 {
   border-radius: 4px;
   background: #f9fafb;
   color: #374151;
+}
+
+.cv-ref-doc .cv-ref__skills-sub {
+  margin: 0.35rem 0 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+}
+
+.cv-ref-doc .cv-ref__section .cv-ref__skills-sub:first-of-type {
+  margin-top: 0;
 }
 
 .cv-ref-doc .cv-ref__list {

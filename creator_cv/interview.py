@@ -121,11 +121,11 @@ def build_step_context(step_id: str, data: dict[str, Any]) -> dict[str, Any]:
         ctx["only_continue"] = True
 
     elif step_id == "meta":
-        ctx["step_title"] = "Objetivo e idioma"
+        ctx["step_title"] = "Datos generales y contacto"
+        contact = meta.get("contacto") if isinstance(meta.get("contacto"), dict) else {}
         ctx["questions"] = [
-            "¿En qué idioma quieres el CV?",
-            "¿Cuál es tu objetivo principal? (ej. tipo de rol, mercado, empresa)",
-            "Opcional: tipo de CV y nivel aproximado.",
+            "Idioma, cómo te presentas en el CV (nombre y título) y forma de contacto opcional.",
+            "Objetivo del CV y detalles opcionales (tipo de CV, nivel).",
         ]
         ctx["fields"] = [
             {
@@ -133,52 +133,85 @@ def build_step_context(step_id: str, data: dict[str, Any]) -> dict[str, Any]:
                 "label": "Idioma del CV",
                 "type": "text",
                 "value": meta.get("idioma_cv") or "",
-                "hint": "Ej. español, inglés",
+                "hint": "Ej. castellano, español, inglés",
+            },
+            {
+                "name": "nombre_completo",
+                "label": "Nombre completo (como en el encabezado)",
+                "type": "text",
+                "value": meta.get("nombre_completo") or "",
+                "hint": "Opcional si aún no quieres ponerlo",
+            },
+            {
+                "name": "titulo_profesional",
+                "label": "Título profesional o puesto objetivo",
+                "type": "text",
+                "value": meta.get("titulo_profesional") or "",
+                "hint": "Una línea, ej. Desarrollador de software",
+            },
+            {
+                "name": "email",
+                "label": "Email",
+                "type": "text",
+                "value": (contact.get("email") or "") if contact else "",
+                "hint": "Opcional",
+            },
+            {
+                "name": "telefono",
+                "label": "Teléfono",
+                "type": "text",
+                "value": (contact.get("telefono") or "") if contact else "",
+                "hint": "Opcional",
+            },
+            {
+                "name": "linkedin",
+                "label": "LinkedIn u otro enlace",
+                "type": "text",
+                "value": (contact.get("linkedin") or "") if contact else "",
+                "hint": "Opcional",
+            },
+            {
+                "name": "ubicacion_contacto",
+                "label": "Ubicación y/o modalidad (remoto, híbrido…)",
+                "type": "text",
+                "value": (contact.get("ubicacion") or "") if contact else "",
+                "hint": "Opcional",
             },
             {
                 "name": "objetivo_cv",
-                "label": "Objetivo",
+                "label": "Objetivo del CV",
                 "type": "textarea",
                 "value": meta.get("objetivo_cv") or "",
-                "hint": "",
+                "hint": "Rol, industria o tipo de oportunidad que buscas",
             },
             {
                 "name": "tipo_cv",
                 "label": "Tipo de CV (opcional)",
                 "type": "text",
                 "value": meta.get("tipo_cv") or "",
-                "hint": "cronológico, funcional o mixto",
+                "hint": "Cronológico, funcional o mixto",
             },
             {
                 "name": "nivel_seniority",
                 "label": "Nivel (opcional)",
                 "type": "text",
                 "value": meta.get("nivel_seniority") or "",
-                "hint": "ej. junior, semi-senior, senior",
+                "hint": "Ej. junior, semi-senior, senior",
             },
         ]
 
     elif step_id == "perfil":
         ctx["step_title"] = "Perfil profesional"
         ctx["questions"] = [
-            "Resume en pocas frases tu perfil (solo hechos que quieras incluir).",
-            "Palabras clave separadas por comas (stack, dominios).",
+            "Redacta un resumen breve (qué haces, foco, aportación). Las herramientas y tecnologías van en el paso «Habilidades».",
         ]
-        kw = perfil.get("palabras_clave") or []
         ctx["fields"] = [
             {
                 "name": "resumen",
-                "label": "Resumen",
+                "label": "Resumen profesional",
                 "type": "textarea",
                 "value": perfil.get("resumen") or "",
-                "hint": "",
-            },
-            {
-                "name": "palabras_clave",
-                "label": "Palabras clave",
-                "type": "text",
-                "value": ", ".join(str(x) for x in kw),
-                "hint": "Separadas por comas",
+                "hint": "3–8 líneas; hechos que quieras incluir (sin inventar)",
             },
         ]
 
@@ -241,16 +274,25 @@ def build_step_context(step_id: str, data: dict[str, Any]) -> dict[str, Any]:
 
     elif step_id == "habilidades":
         ctx["step_title"] = "Habilidades"
+        kw_hint = ""
+        kw = perfil.get("palabras_clave") or []
+        if kw and not (hab.get("tecnicas") or []):
+            kw_hint = (
+                " Si ya tienes lista `perfil_profesional.palabras_clave` en el JSON, "
+                "cópialas aquí como técnicas o edítalas en el editor: en la vista previa "
+                "se muestran con las técnicas."
+            )
         ctx["questions"] = [
-            "Lista habilidades técnicas, blandas e idiomas (separadas por comas).",
+            "Stack y herramientas en **Técnicas** (idiomas de programación, frameworks, BD, nube…). "
+            "Interpersonales en **Blandas**. Idiomas humanos en **Idiomas**." + kw_hint,
         ]
         ctx["fields"] = [
             {
                 "name": "tecnicas",
-                "label": "Técnicas",
+                "label": "Técnicas (stack)",
                 "type": "text",
                 "value": ", ".join(str(x) for x in (hab.get("tecnicas") or [])),
-                "hint": "",
+                "hint": "Separadas por comas: Python, React, PostgreSQL…",
             },
             {
                 "name": "blandas",
@@ -402,15 +444,23 @@ def apply_step(
 
     if step_id == "meta":
         data["meta"]["idioma_cv"] = (form.get("idioma_cv") or "").strip()
+        data["meta"]["nombre_completo"] = (form.get("nombre_completo") or "").strip()
+        data["meta"]["titulo_profesional"] = (
+            form.get("titulo_profesional") or ""
+        ).strip()
         data["meta"]["objetivo_cv"] = (form.get("objetivo_cv") or "").strip()
         data["meta"]["tipo_cv"] = (form.get("tipo_cv") or "").strip()
         data["meta"]["nivel_seniority"] = (form.get("nivel_seniority") or "").strip()
+        if not isinstance(data["meta"].get("contacto"), dict):
+            data["meta"]["contacto"] = {}
+        co = data["meta"]["contacto"]
+        co["email"] = (form.get("email") or "").strip()
+        co["telefono"] = (form.get("telefono") or "").strip()
+        co["linkedin"] = (form.get("linkedin") or "").strip()
+        co["ubicacion"] = (form.get("ubicacion_contacto") or "").strip()
 
     elif step_id == "perfil":
         data["perfil_profesional"]["resumen"] = (form.get("resumen") or "").strip()
-        data["perfil_profesional"]["palabras_clave"] = _comma_list(
-            form.get("palabras_clave") or ""
-        )
 
     elif step_id == "experiencia" and action != "skip":
         empresa = (form.get("empresa") or "").strip()

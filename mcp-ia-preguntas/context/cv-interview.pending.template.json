@@ -1,30 +1,86 @@
 {
   "version": 1,
   "cv_id": null,
-  "question_markdown": "## Ejemplo\n\n¿En qué **idioma** quieres el CV y qué **objetivo** priorizamos (rol, industria)?",
-  "review_heading": "",
+  "question_markdown": "## Perfil y dirección del CV (una sola ronda)\n\nEn un solo paso rellenamos lo esencial del **bloque 1** (objetivo, titulación del rol, nivel y un resumen breve). Con esto la hoja de vida ya tiene **orientación clara**; en las siguientes rondas (Cursor / IA) se puede ampliar experiencia, educación y habilidades sin tantas preguntas repetidas.\n\nSé concreto; no hace falta redacción final pulida.",
+  "review_heading": "Perfil objetivo",
   "inputs": [
     {
       "name": "idioma",
-      "label": "Idioma del CV",
+      "label": "Id(s) de idioma del CV (p. ej. es, en)",
       "type": "text",
       "required": true
     },
     {
-      "name": "objetivo",
-      "label": "Objetivo principal",
+      "name": "nombre_completo",
+      "label": "Nombre completo (como quieres que aparezca)",
+      "type": "text",
+      "required": false
+    },
+    {
+      "name": "titulo_profesional",
+      "label": "Título profesional o puesto objetivo (una línea)",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "nivel_seniority",
+      "label": "Nivel aproximado (junior / semi-senior / senior / lead, etc.)",
+      "type": "text",
+      "required": false
+    },
+    {
+      "name": "objetivo_cv",
+      "label": "Objetivo del CV: rol, industria o tipo de oportunidad que buscas",
       "type": "textarea",
       "required": true
+    },
+    {
+      "name": "ubicacion_modalidad",
+      "label": "Ubicación y modalidad (p. ej. Ciudad · remoto/híbrido/presencial)",
+      "type": "text",
+      "required": false
+    },
+    {
+      "name": "resumen",
+      "label": "Resumen profesional (3-6 líneas: qué haces, foco, aportación)",
+      "type": "textarea",
+      "required": true
+    },
+    {
+      "name": "email",
+      "label": "Email de contacto (opcional)",
+      "type": "text",
+      "required": false
+    },
+    {
+      "name": "telefono",
+      "label": "Teléfono (opcional)",
+      "type": "text",
+      "required": false
+    },
+    {
+      "name": "linkedin",
+      "label": "LinkedIn o enlace breve (opcional)",
+      "type": "text",
+      "required": false
     }
   ],
   "merge": {
     "type": "assign_paths",
     "assignments": [
       { "input": "idioma", "path": "meta.idioma_cv" },
-      { "input": "objetivo", "path": "meta.objetivo_cv" }
+      { "input": "nombre_completo", "path": "meta.nombre_completo" },
+      { "input": "titulo_profesional", "path": "meta.titulo_profesional" },
+      { "input": "nivel_seniority", "path": "meta.nivel_seniority" },
+      { "input": "objetivo_cv", "path": "meta.objetivo_cv" },
+      { "input": "ubicacion_modalidad", "path": "meta.contacto.ubicacion" },
+      { "input": "resumen", "path": "perfil_profesional.resumen" },
+      { "input": "email", "path": "meta.contacto.email" },
+      { "input": "telefono", "path": "meta.contacto.telefono" },
+      { "input": "linkedin", "path": "meta.contacto.linkedin" }
     ]
   },
   "review_append": {
-    "markdown": "### Idioma y objetivo\n\n- **Idioma:** {idioma}\n- **Objetivo:** {objetivo}\n"
+    "markdown": "### Perfil y contacto\n\n- **Idioma:** {idioma}\n- **Nombre:** {nombre_completo}\n- **Título / puesto:** {titulo_profesional}\n- **Nivel:** {nivel_seniority}\n- **Objetivo:** {objetivo_cv}\n- **Ubicación / modalidad:** {ubicacion_modalidad}\n- **Resumen:** {resumen}\n- **Email:** {email}\n- **Teléfono:** {telefono}\n- **LinkedIn:** {linkedin}\n"
   }
 }

@@ -26,6 +26,20 @@ def _e(value: Any) -> str:
     return html.escape("" if value is None else str(value))
 
 
+def _normalize_link_list(links: Any) -> list[str]:
+    """Lista de enlaces o un solo string con URLs separadas por comas."""
+    if links is None:
+        return []
+    if isinstance(links, list):
+        return [str(x).strip() for x in links if str(x).strip()]
+    if isinstance(links, str):
+        s = links.strip()
+        if not s:
+            return []
+        return [p.strip() for p in s.split(",") if p.strip()]
+    return []
+
+
 def _contact_line(meta: dict[str, Any]) -> list[tuple[str, str]]:
     """Pares (etiqueta, valor) para la cabecera; solo entradas con texto."""
     raw = meta.get("contacto")
@@ -50,6 +64,35 @@ def _contact_line(meta: dict[str, Any]) -> list[tuple[str, str]]:
 
 def _meta_contact_nonempty(meta: dict[str, Any]) -> bool:
     return bool(_contact_line(meta))
+
+
+def _merge_tecnicas_lists(
+    explicit: Any,
+    from_keywords: Any,
+) -> list[str]:
+    """
+    Lista única para mostrar/exportar: habilidades.tecnicas primero, luego
+    perfil_profesional.palabras_clave que no estén ya (mismo uso práctico que stack).
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def _add_many(raw: Any) -> None:
+        if raw is None:
+            return
+        items = raw if isinstance(raw, list) else [raw]
+        for x in items:
+            s = str(x).strip()
+            if not s:
+                continue
+            key = s.casefold()
+            if key not in seen:
+                seen.add(key)
+                out.append(s)
+
+    _add_many(explicit)
+    _add_many(from_keywords)
+    return out
 
 
 def context_has_preview_content(data: dict[str, Any]) -> bool:
@@ -173,23 +216,27 @@ def context_to_structured_preview_html(
             aside_parts.append("</section>")
 
     hab = data.get("habilidades") or {}
-    tech = hab.get("tecnicas") or []
+    perfil_kw = (data.get("perfil_profesional") or {}).get("palabras_clave") or []
+    tech = _merge_tecnicas_lists(hab.get("tecnicas"), perfil_kw)
     soft = hab.get("blandas") or []
     langs = hab.get("idiomas") or []
     if tech or soft or langs:
         aside_parts.append('<section class="cv-ref__section">')
         aside_parts.append('<h2 class="cv-ref__section-title">Habilidades</h2>')
         if tech:
+            aside_parts.append('<p class="cv-ref__skills-sub">Técnicas</p>')
             aside_parts.append('<div class="cv-ref__pills">')
             for t in tech:
                 aside_parts.append(f'<span class="cv-ref__pill">{_e(t)}</span>')
             aside_parts.append("</div>")
         if soft:
+            aside_parts.append('<p class="cv-ref__skills-sub">Blandas</p>')
             aside_parts.append('<ul class="cv-ref__list cv-ref__list--plain">')
             for item in soft:
                 aside_parts.append(f"<li>{_e(item)}</li>")
             aside_parts.append("</ul>")
         if langs:
+            aside_parts.append('<p class="cv-ref__skills-sub">Idiomas</p>')
             aside_parts.append('<ul class="cv-ref__list cv-ref__list--muted">')
             for item in langs:
                 aside_parts.append(f"<li>{_e(item)}</li>")
@@ -214,15 +261,10 @@ def context_to_structured_preview_html(
 
     perfil = data.get("perfil_profesional") or {}
     resumen = (perfil.get("resumen") or "").strip()
-    kw = perfil.get("palabras_clave") or []
-    if resumen or kw:
+    if resumen:
         parts.append('<section class="cv-ref__section">')
         parts.append('<h2 class="cv-ref__section-title">Perfil profesional</h2>')
-        if resumen:
-            parts.append(f'<p class="cv-ref__para">{_e(resumen)}</p>')
-        if kw:
-            kw_str = ", ".join(str(x) for x in kw)
-            parts.append(f'<p class="cv-ref__keywords"><strong>Palabras clave:</strong> {_e(kw_str)}</p>')
+        parts.append(f'<p class="cv-ref__para">{_e(resumen)}</p>')
         parts.append("</section>")
 
     exp = data.get("experiencia") or []
@@ -428,15 +470,10 @@ def json_to_markdown(data: dict[str, Any]) -> str:
 
     perfil = data.get("perfil_profesional") or {}
     resumen = (perfil.get("resumen") or "").strip()
-    kw = perfil.get("palabras_clave") or []
-    if resumen or kw:
+    if resumen:
         lines.append("## Perfil profesional")
-        if resumen:
-            lines.append(resumen)
-            lines.append("")
-        if kw:
-            lines.append("**Palabras clave:** " + ", ".join(str(x) for x in kw))
-            lines.append("")
+        lines.append(resumen)
+        lines.append("")
 
     exp = data.get("experiencia") or []
     if exp:
@@ -508,7 +545,8 @@ def json_to_markdown(data: dict[str, Any]) -> str:
 
     hab = data.get("habilidades") or {}
     if hab:
-        tech = hab.get("tecnicas") or []
+        perfil_kw = (data.get("perfil_profesional") or {}).get("palabras_clave") or []
+        tech = _merge_tecnicas_lists(hab.get("tecnicas"), perfil_kw)
         soft = hab.get("blandas") or []
         langs = hab.get("idiomas") or []
         if tech or soft or langs:
@@ -547,7 +585,7 @@ def json_to_markdown(data: dict[str, Any]) -> str:
         if rec.get("texto_cv"):
             lines.append("**Texto CV:**")
             lines.append(str(rec["texto_cv"]))
-        links = rec.get("links") or []
+        links = _normalize_link_list(rec.get("links"))
         if links:
             lines.append("**Enlaces:**")
             for link in links:

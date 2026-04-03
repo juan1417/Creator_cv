@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from flask import (
     Blueprint,
@@ -8,9 +9,11 @@ from flask import (
     abort,
     current_app,
     flash,
+    make_response,
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from sqlalchemy import select
@@ -22,6 +25,7 @@ from creator_cv.context_sync import (
     write_context_file,
 )
 from creator_cv.mcp_interview import (
+    INTERVIEW_SESSION_SKIP_AUTO_PENDING_KEY,
     PendingInterviewError,
     append_to_review,
     apply_merge,
@@ -105,6 +109,20 @@ def cv_new():
     return redirect(url_for("main.cv_edit", cv_id=cv.id))
 
 
+@bp.route("/cvs/<int:cv_id>/delete", methods=["POST"])
+def cv_delete(cv_id: int):
+    user = get_dev_user()
+    cv = _get_cv_or_404(cv_id, user)
+    title = cv.title or "Sin título"
+    sk = INTERVIEW_SESSION_SKIP_AUTO_PENDING_KEY
+    if session.get(sk) == cv.id:
+        session.pop(sk, None)
+    db.session.delete(cv)
+    db.session.commit()
+    flash(f"CV eliminado: «{title}».", "success")
+    return redirect(url_for("main.index"))
+
+
 @bp.route("/cvs/<int:cv_id>/interview/mcp", methods=["GET", "POST"])
 def cv_interview_mcp(cv_id: int):
     user = get_dev_user()
@@ -132,6 +150,7 @@ def cv_interview_mcp(cv_id: int):
             db.session.commit()
             write_review_file(review_path, cv.review_markdown or "")
             remove_pending_file(pending_path)
+            session[INTERVIEW_SESSION_SKIP_AUTO_PENDING_KEY] = cv.id
             flash(
                 "Respuesta guardada. Contexto y revisión actualizados. "
                 "La IA en Cursor puede leer el contexto y escribir la siguiente pregunta.",
@@ -140,6 +159,24 @@ def cv_interview_mcp(cv_id: int):
         except PendingInterviewError as e:
             flash(str(e), "error")
         return redirect(url_for("main.cv_interview_mcp", cv_id=cv.id))
+
+    if current_app.config.get("CREATOR_CV_INTERVIEW_AUTO_FIRST_PENDING", True):
+        sk = INTERVIEW_SESSION_SKIP_AUTO_PENDING_KEY
+        if session.get(sk) == cv.id:
+            session.pop(sk, None)
+        elif not pending_path.is_file():
+            try:
+                seed_pending_from_template(pending_path, cv_id=cv.id)
+                flash(
+                    "Primera ronda generada desde la plantilla del repo (perfil completo en un paso). "
+                    "Para las siguientes rondas, pide en Cursor un pending que recoja experiencia, educación "
+                    "o habilidades en bloque para acabar antes. Desactiva la auto-primera-ronda con "
+                    "CREATOR_CV_INTERVIEW_AUTO_FIRST_PENDING=0 si prefieres solo MCP.",
+                    "info",
+                )
+                return redirect(url_for("main.cv_interview_mcp", cv_id=cv.id))
+            except PendingInterviewError as e:
+                flash(str(e), "error")
 
     raw: dict[str, Any] | None = None
     read_err: str | None = None
@@ -162,16 +199,23 @@ def cv_interview_mcp(cv_id: int):
     if pending_valid:
         q_html = question_html(pending_valid["question_markdown"])
 
-    return render_template(
-        "cv_interview_mcp.html",
-        cv=cv,
-        idle=idle,
-        pending_error=err,
-        pending=pending_valid,
-        question_html_safe=q_html,
-        template_path=str(pending_template_path()),
-        review_path=str(review_path),
+    pending_abs = pending_path.resolve()
+    resp = make_response(
+        render_template(
+            "cv_interview_mcp.html",
+            cv=cv,
+            idle=idle,
+            pending_error=err,
+            pending=pending_valid,
+            question_html_safe=q_html,
+            template_path=str(pending_template_path()),
+            review_path=str(review_path),
+            pending_path_resolved=str(pending_abs),
+            pending_file_exists=pending_path.is_file(),
+        )
     )
+    resp.headers["Cache-Control"] = "no-store, max-age=0"
+    return resp
 
 
 @bp.route("/cvs/<int:cv_id>/interview/mcp/seed-template", methods=["POST"])
@@ -198,8 +242,9 @@ def cv_interview_mcp_seed_template(cv_id: int):
     try:
         seed_pending_from_template(pending_path, cv_id=cv.id)
         flash(
-            "Se creó cv-interview.pending.json desde la plantilla (primera pregunta de ejemplo). "
-            "Puedes responder abajo; las siguientes rondas pueden seguir viniendo de Cursor/MCP.",
+            "Archivo listo: la app escribió cv-interview.pending.json en disco (copia de la plantilla). "
+            "Esto no arranca ni usa MCP: MCP solo corre dentro de Cursor cuando chateas. "
+            "Recarga y responde; para la siguiente runda usa el chat en Cursor o este botón tras borrar el pending.",
             "success",
         )
     except PendingInterviewError as e:

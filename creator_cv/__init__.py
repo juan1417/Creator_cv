@@ -8,6 +8,13 @@ from creator_cv.extensions import csrf, db, migrate
 load_dotenv()
 
 
+def _env_truthy(name: str, default: bool = True) -> bool:
+    raw = os.environ.get(name, "")
+    if raw.strip() == "":
+        return default
+    return raw.strip().lower() not in ("0", "false", "no", "off")
+
+
 def create_app(test_config: dict | None = None) -> Flask:
     app = Flask(__name__)
 
@@ -25,6 +32,9 @@ def create_app(test_config: dict | None = None) -> Flask:
             "CREATOR_CV_INTERVIEW_PENDING_PATH", ""
         ),
         CREATOR_CV_REVIEW_PATH=os.environ.get("CREATOR_CV_REVIEW_PATH", ""),
+        CREATOR_CV_INTERVIEW_AUTO_FIRST_PENDING=_env_truthy(
+            "CREATOR_CV_INTERVIEW_AUTO_FIRST_PENDING", True
+        ),
     )
 
     if test_config is not None:
