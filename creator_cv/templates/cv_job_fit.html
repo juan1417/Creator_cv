@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Encaje con oferta · {{ cv.title }}{% endblock %}
+{% block title %}Compatibilidad con oferta · {{ cv.title }}{% endblock %}
 {% block head_extra %}
   <meta name="csrf-token" content="{{ csrf_token() }}" />
 {% endblock %}
@@ -7,10 +7,10 @@
   <p class="breadcrumb">
     <a href="{{ url_for('main.index') }}">Inicio</a> /
     <a href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">Editor</a> /
-    Encaje con oferta
+    Compatibilidad con oferta
   </p>
 
-  <h1>Encaje con una oferta de trabajo</h1>
+  <h1>Compatibilidad con una oferta de trabajo</h1>
   <p class="lede page-section__lede">
     Pega el <strong>texto completo</strong> de la publicación (requisitos, responsabilidades, stack).
     La app lo compara con el <strong>JSON de este CV</strong> usando Gemini y devuelve un análisis orientativo:

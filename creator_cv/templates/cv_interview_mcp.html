@@ -9,7 +9,7 @@
 
   <div class="toolbar page-section" role="navigation" aria-label="Otras herramientas de este CV">
     <a class="btn btn-secondary" href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">Editor JSON</a>
-    <a class="btn btn-primary" href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}">Encaje con oferta</a>
+    <a class="btn btn-primary" href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}">Compatibilidad con oferta</a>
     <a class="btn btn-secondary" href="{{ url_for('main.cv_chat', cv_id=cv.id) }}">Chat IA</a>
     <a class="btn btn-ghost" href="{{ url_for('main.cv_preview', cv_id=cv.id) }}">Vista previa</a>
   </div>

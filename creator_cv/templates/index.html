@@ -4,7 +4,7 @@
   <h1>Creator CV</h1>
   <p class="lede">Edita el contexto estructurado del CV, sincronízalo con el archivo que usa el MCP en Cursor y descárgalo en Markdown, PDF o Word.</p>
   <p class="callout" role="note">
-    <strong>Encaje con una oferta:</strong> abre un CV → enlace <strong>Encaje con oferta</strong> o <strong>Encaje oferta</strong> en la lista (pega el texto de la vacante; requiere <code>GEMINI_API_KEY</code>).
+    <strong>Compatibilidad con oferta:</strong> abre un CV → botón azul <strong>Compatibilidad con oferta</strong> o enlace <strong>Compat. oferta</strong> en la lista (pega el texto de la vacante; requiere <code>GEMINI_API_KEY</code>).
   </p>
 
   <section class="card" aria-labelledby="new-cv-title">
@@ -25,7 +25,7 @@
           <li>
             <a href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">{{ cv.title or "Sin título" }}</a>
             <a class="meta-muted" href="{{ url_for('main.cv_chat', cv_id=cv.id) }}">Chat IA</a>
-            <a class="meta-muted" href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}">Encaje oferta</a>
+            <a class="meta-muted" href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}">Compat. oferta</a>
             <a class="meta-muted" href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">MCP</a>
             <a class="meta-muted" href="{{ url_for('main.cv_interview', cv_id=cv.id) }}">Asistente</a>
             <span class="meta-muted">actualizado {{ cv.updated_at.strftime("%Y-%m-%d %H:%M") if cv.updated_at else "" }}</span>
