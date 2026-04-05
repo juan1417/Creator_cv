@@ -11,17 +11,20 @@
       Puedes rellenarlo a mano, con el <a href="{{ url_for('main.cv_chat', cv_id=cv.id) }}">chat IA (Gemini)</a>, el
       <a href="{{ url_for('main.cv_interview', cv_id=cv.id) }}">asistente local</a> o la
       <a href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">entrevista MCP</a>.
-      También puedes <a href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}">pegar una oferta</a> y ver encaje y mejoras orientativas.
+      También puedes <a href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}">pegar una oferta</a> y ver compatibilidad y mejoras orientativas.
       Lo que guardes se almacena en la base de datos de esta app.
     </p>
   </section>
 
   <section class="card page-section" aria-labelledby="sec-actions">
     <h2 id="sec-actions" class="h3">Acciones y descargas</h2>
-    <p class="help page-section__help">Entrevistas, sincronizar con el archivo que edita Cursor, vista previa y exportar.</p>
+    <p class="help page-section__help">
+      Entrevistas, sincronizar con el archivo que edita Cursor, vista previa y exportar.
+      Para <strong>comparar una vacante con tu CV</strong> usa el botón azul <strong>Compatibilidad con oferta</strong> (Gemini).
+    </p>
     <div class="toolbar" role="group" aria-label="Acciones del CV">
       <a class="btn btn-primary" href="{{ url_for('main.cv_chat', cv_id=cv.id) }}">Chat IA</a>
-      <a class="btn btn-secondary" href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}">Encaje con oferta</a>
+      <a class="btn btn-primary" href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}" title="Pegar el texto de la oferta y ver requisitos vs tu CV">Compatibilidad con oferta</a>
       <a class="btn btn-secondary" href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">Entrevista MCP</a>
       <a class="btn btn-secondary" href="{{ url_for('main.cv_review', cv_id=cv.id) }}">Revisión Markdown</a>
       <a class="btn btn-secondary" href="{{ url_for('main.cv_interview', cv_id=cv.id) }}">Asistente local</a>
