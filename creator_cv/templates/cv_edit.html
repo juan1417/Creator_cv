@@ -10,7 +10,9 @@
       Aquí vive el <strong>contexto estructurado</strong> de tu CV: un JSON que la app usa para vista previa y exportación.
       Puedes rellenarlo a mano, con el <a href="{{ url_for('main.cv_chat', cv_id=cv.id) }}">chat IA (Gemini)</a>, el
       <a href="{{ url_for('main.cv_interview', cv_id=cv.id) }}">asistente local</a> o la
-      <a href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">entrevista MCP</a>. Lo que guardes se almacena en la base de datos de esta app.
+      <a href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">entrevista MCP</a>.
+      También puedes <a href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}">pegar una oferta</a> y ver encaje y mejoras orientativas.
+      Lo que guardes se almacena en la base de datos de esta app.
     </p>
   </section>
 
@@ -19,6 +21,7 @@
     <p class="help page-section__help">Entrevistas, sincronizar con el archivo que edita Cursor, vista previa y exportar.</p>
     <div class="toolbar" role="group" aria-label="Acciones del CV">
       <a class="btn btn-primary" href="{{ url_for('main.cv_chat', cv_id=cv.id) }}">Chat IA</a>
+      <a class="btn btn-secondary" href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}">Encaje con oferta</a>
       <a class="btn btn-secondary" href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">Entrevista MCP</a>
       <a class="btn btn-secondary" href="{{ url_for('main.cv_review', cv_id=cv.id) }}">Revisión Markdown</a>
       <a class="btn btn-secondary" href="{{ url_for('main.cv_interview', cv_id=cv.id) }}">Asistente local</a>
