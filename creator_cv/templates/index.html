@@ -22,6 +22,7 @@
           <li>
             <a href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">{{ cv.title or "Sin título" }}</a>
             <a class="meta-muted" href="{{ url_for('main.cv_chat', cv_id=cv.id) }}">Chat IA</a>
+            <a class="meta-muted" href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}">Encaje oferta</a>
             <a class="meta-muted" href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">MCP</a>
             <a class="meta-muted" href="{{ url_for('main.cv_interview', cv_id=cv.id) }}">Asistente</a>
             <span class="meta-muted">actualizado {{ cv.updated_at.strftime("%Y-%m-%d %H:%M") if cv.updated_at else "" }}</span>

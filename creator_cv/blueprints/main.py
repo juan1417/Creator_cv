@@ -52,7 +52,7 @@ from creator_cv.cv_render import (
     markdown_to_pdf_bytes,
 )
 from creator_cv.extensions import db
-from creator_cv.gemini_chat import run_chat_turn
+from creator_cv.gemini_chat import run_chat_turn, run_job_fit_analysis
 from creator_cv.interview import (
     STEP_ORDER,
     apply_step,
@@ -384,6 +384,40 @@ def cv_chat_clear(cv_id: int):
     db.session.commit()
     flash("Historial del chat borrado.", "info")
     return redirect(url_for("main.cv_chat", cv_id=cv.id))
+
+
+@bp.route("/cvs/<int:cv_id>/job-fit", methods=["GET"])
+def cv_job_fit(cv_id: int):
+    user = get_dev_user()
+    cv = _get_cv_or_404(cv_id, user)
+    gemini_ok = bool(os.environ.get("GEMINI_API_KEY", "").strip())
+    return render_template(
+        "cv_job_fit.html",
+        cv=cv,
+        gemini_configured=gemini_ok,
+    )
+
+
+@bp.route("/cvs/<int:cv_id>/job-fit/analyze", methods=["POST"])
+def cv_job_fit_analyze(cv_id: int):
+    user = get_dev_user()
+    cv = _get_cv_or_404(cv_id, user)
+    job_text = (request.form.get("job_text") or "").strip()
+    try:
+        data = parse_cv_context_json(cv.context_json)
+    except (json.JSONDecodeError, ValueError) as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    try:
+        md = run_job_fit_analysis(cv_data=data, job_text=job_text)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except RuntimeError as e:
+        return jsonify({"ok": False, "error": str(e)}), 503
+    except Exception as e:
+        current_app.logger.exception("job_fit_analyze")
+        return jsonify({"ok": False, "error": f"Error del modelo: {e}"}), 500
+    html = question_html(md)
+    return jsonify({"ok": True, "markdown": md, "html": html})
 
 
 @bp.route("/cvs/<int:cv_id>/review")

@@ -213,3 +213,100 @@ def run_chat_turn(
     elif not visible:
         visible = raw_text.strip() or "(Sin respuesta del modelo.)"
     return visible, patch
+
+
+JOB_FIT_MAX_JOB_CHARS = 24_000
+JOB_FIT_MIN_JOB_CHARS = 40
+
+_JOB_FIT_SYSTEM = """Eres un analista de alineación entre un currículum (contexto JSON) y el texto de una oferta de empleo.
+
+Reglas estrictas:
+- Basa el análisis SOLO en el JSON del CV y en el texto de la oferta. No inventes experiencias, empresas, títulos, certificaciones, fechas ni métricas.
+- Si la oferta exige algo y no hay evidencia clara en el CV, dilo explícitamente (p. ej. «no consta en tu CV» o «no hay evidencia en el contexto»).
+- Las valoraciones numéricas o de «encaje» son orientativas y subjetivas; indica que no sustituyen una decisión de selección real.
+- Tono profesional y directo. Responde en español (salvo que la oferta esté solo en otro idioma y convenga citar términos en el idioma original entre comillas).
+
+Salida obligatoria en Markdown con estas secciones (en este orden), usando `##` para cada título:
+## Resumen del encaje
+Un párrafo corto + una línea con **Encaje orientativo (0–10):** X/10 y por qué.
+
+## Requisitos de la oferta vs tu CV
+Lista o tabla: requisito o criterio | estado (cubierto / parcial / no consta) | qué dice tu CV (cita breve) | qué falta o es incierto
+
+## Fortalezas para este puesto
+Viñetas basadas en datos del CV.
+
+## Brechas y riesgos
+Viñetas honestas (incluye «no consta» cuando aplique).
+
+## Cómo mejorar (accionable)
+Pasos concretos para el CV o la preparación; no inventes logros: si hace falta información, dilo y sugiere qué añadir o aclarar en el CV.
+"""
+
+
+def run_job_fit_analysis(
+    *,
+    cv_data: dict[str, Any],
+    job_text: str,
+) -> str:
+    """
+    Compara el texto de una oferta con el contexto del CV. Devuelve Markdown (sin HTML).
+    """
+    job = job_text.strip()
+    if len(job) < JOB_FIT_MIN_JOB_CHARS:
+        raise ValueError(
+            f"Pega un texto de oferta más largo (mínimo ~{JOB_FIT_MIN_JOB_CHARS} caracteres)."
+        )
+    if len(job) > JOB_FIT_MAX_JOB_CHARS:
+        raise ValueError(
+            f"El texto es demasiado largo (máximo {JOB_FIT_MAX_JOB_CHARS} caracteres)."
+        )
+
+    client = _client()
+    cv_json_text = summarize_cv_for_prompt(cv_data, max_chars=8000)
+    user_prompt = (
+        "Analiza el encaje entre mi CV (JSON) y esta oferta.\n\n"
+        "## Contexto JSON del CV\n"
+        f"```json\n{cv_json_text}\n```\n\n"
+        "## Texto de la oferta\n"
+        f"{job}\n"
+    )
+
+    cfg = types.GenerateContentConfig(
+        system_instruction=_JOB_FIT_SYSTEM.strip(),
+        temperature=0.35,
+    )
+    candidates = _model_candidates()
+    resp = None
+    last_err: Exception | None = None
+    for mid in candidates:
+        try:
+            resp = client.models.generate_content(
+                model=mid,
+                contents=user_prompt,
+                config=cfg,
+            )
+            break
+        except genai_errors.APIError as e:
+            last_err = e
+            code = getattr(e, "code", 0)
+            if code == 429 and mid != candidates[-1]:
+                continue
+            raise RuntimeError(friendly_api_error(e)) from e
+    if resp is None:
+        raise RuntimeError(
+            friendly_api_error(last_err) if last_err else "Sin respuesta del modelo."
+        )
+    raw_text = getattr(resp, "text", None) or ""
+    if not raw_text.strip() and resp.candidates:
+        chunks: list[str] = []
+        for c in resp.candidates:
+            if c.content and c.content.parts:
+                for p in c.content.parts:
+                    if getattr(p, "text", None):
+                        chunks.append(p.text)
+        raw_text = "\n".join(chunks)
+    out = raw_text.strip()
+    if not out:
+        raise RuntimeError("El modelo devolvió una respuesta vacía.")
+    return out
