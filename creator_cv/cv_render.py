@@ -735,17 +735,57 @@ def context_to_pdf_bytes(
             style = "B"
         pdf.set_font(font, style, size=size)
 
-    def write_block(x: float, y: float, w: float, text: str, size: float) -> float:
+    def write_block(
+        x: float,
+        y: float,
+        w: float,
+        text: str,
+        size: float,
+        *,
+        align: str = "L",
+    ) -> float:
         text = txt(text).strip()
         if not text:
             return y
         set_font(size)
         pdf.set_xy(x, y)
         if XPos is not None and YPos is not None:
-            pdf.multi_cell(w, lh, text, new_x=XPos.LEFT, new_y=YPos.NEXT)
+            pdf.multi_cell(
+                w,
+                lh,
+                text,
+                align=align,
+                new_x=XPos.LEFT,
+                new_y=YPos.NEXT,
+            )
         else:
-            pdf.multi_cell(w, lh, text)
+            pdf.multi_cell(w, lh, text, align=align)
         return pdf.get_y()
+
+    def write_pills(x: float, y: float, w: float, items: list[str]) -> float:
+        cur_x = x
+        cur_y = y
+        pill_h = 6
+        pad_x = 1.8
+        gap_x = 1.4
+        gap_y = 1.4
+        set_font(8)
+        pdf.set_text_color(55, 65, 81)
+        pdf.set_draw_color(209, 213, 219)
+        pdf.set_fill_color(249, 250, 251)
+        for raw in items:
+            label = txt(raw).strip()
+            if not label:
+                continue
+            pill_w = pdf.get_string_width(label) + (pad_x * 2)
+            if cur_x + pill_w > x + w:
+                cur_x = x
+                cur_y += pill_h + gap_y
+            pdf.set_xy(cur_x, cur_y)
+            pdf.cell(pill_w, pill_h, label, border=1, ln=0, align="C", fill=True)
+            cur_x += pill_w + gap_x
+        pdf.set_text_color(17, 24, 39)
+        return cur_y + pill_h
 
     def section_title(x: float, y: float, w: float, title: str) -> float:
         set_font(section_sz, bold=True)
@@ -854,7 +894,7 @@ def context_to_pdf_bytes(
         if tech:
             set_font(small_sz, bold=True)
             aside_y = write_block(aside_x, aside_y, aside_w, "Técnicas", small_sz)
-            aside_y = write_block(aside_x, aside_y, aside_w, ", ".join(str(t) for t in tech), small_sz)
+            aside_y = write_pills(aside_x, aside_y, aside_w, [str(t) for t in tech])
             aside_y += 1
         if soft:
             set_font(small_sz, bold=True)
@@ -889,9 +929,13 @@ def context_to_pdf_bytes(
             drange = _exp_date_range(item)
             loc = (item.get("ubicacion") or "").strip()
             title_line = " · ".join(x for x in (cargo, org) if x)
-            if title_line:
+            if cargo:
                 set_font(role_sz, bold=True)
-                main_y = write_block(main_x, main_y, main_w, title_line, role_sz)
+                main_y = write_block(main_x, main_y, main_w, cargo, role_sz)
+            if org:
+                pdf.set_text_color(30, 90, 140)
+                main_y = write_block(main_x, main_y, main_w, org, body_sz)
+                pdf.set_text_color(17, 24, 39)
             meta_line = " | ".join(x for x in (drange, loc) if x)
             if meta_line:
                 pdf.set_text_color(107, 114, 128)
@@ -922,7 +966,11 @@ def context_to_pdf_bytes(
             loc = (item.get("ubicacion") or "").strip()
             if titulo or inst:
                 set_font(role_sz, bold=True)
-                main_y = write_block(main_x, main_y, main_w, " · ".join(x for x in (titulo, inst) if x), role_sz)
+                main_y = write_block(main_x, main_y, main_w, titulo, role_sz)
+            if inst:
+                pdf.set_text_color(30, 90, 140)
+                main_y = write_block(main_x, main_y, main_w, inst, body_sz)
+                pdf.set_text_color(17, 24, 39)
             extra: list[str] = []
             if item.get("fecha_inicio") or item.get("fecha_fin"):
                 extra.append(
