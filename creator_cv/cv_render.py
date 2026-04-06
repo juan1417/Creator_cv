@@ -12,6 +12,11 @@ from typing import Any
 import markdown as md_lib
 from docx import Document
 from fpdf import FPDF
+try:
+    from fpdf.enums import XPos, YPos
+except Exception:  # pragma: no cover - compatibilidad con paquetes fpdf antiguos
+    XPos = None
+    YPos = None
 
 
 def markdown_to_preview_html(md: str) -> str:
@@ -685,72 +690,300 @@ def _fold_latin_fallback(text: str) -> str:
     )
 
 
-def markdown_to_pdf_bytes(md: str) -> bytes:
+def context_to_pdf_bytes(
+    data: dict[str, Any],
+    *,
+    fallback_title: str = "",
+) -> bytes:
     """
-    PDF desde Markdown. Usa una fuente TrueType del sistema para Unicode;
-    sin fuente disponible, simplifica caracteres para Helvetica.
+    PDF estructurado inspirado en la vista previa (cabecera + dos columnas).
+    No depende de Markdown para evitar drift y saltos extraños.
     """
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.set_margins(18, 18, 18)
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.set_margins(14, 14, 14)
     pdf.add_page()
-    page_w = pdf.epw
 
     font_path = _unicode_font_path()
-    font_family = "Helvetica"
-    size_body = 10
-    size_h1, size_h2, size_h3 = 16, 13, 11
-    line_h = 5
+    use_custom_font = bool(font_path)
+    if use_custom_font:
+        pdf.add_font("CvBody", "", str(font_path))
+        font = "CvBody"
+    else:
+        font = "Helvetica"
 
+    page_left = pdf.l_margin
+    page_top = pdf.t_margin
+    page_right = pdf.w - pdf.r_margin
+    page_width = pdf.epw
+
+    title_sz = 22
+    subtitle_sz = 13
+    section_sz = 9
+    role_sz = 12
+    body_sz = 10
+    small_sz = 9
+    lh = 5.2
+
+    def txt(v: Any) -> str:
+        s = "" if v is None else str(v)
+        return _fold_latin_fallback(s) if not font_path else s
+
+    def set_font(size: float, *, bold: bool = False) -> None:
+        style = ""
+        if bold and not use_custom_font:
+            style = "B"
+        pdf.set_font(font, style, size=size)
+
+    def write_block(x: float, y: float, w: float, text: str, size: float) -> float:
+        text = txt(text).strip()
+        if not text:
+            return y
+        set_font(size)
+        pdf.set_xy(x, y)
+        if XPos is not None and YPos is not None:
+            pdf.multi_cell(w, lh, text, new_x=XPos.LEFT, new_y=YPos.NEXT)
+        else:
+            pdf.multi_cell(w, lh, text)
+        return pdf.get_y()
+
+    def section_title(x: float, y: float, w: float, title: str) -> float:
+        set_font(section_sz, bold=True)
+        pdf.set_text_color(102, 112, 133)
+        pdf.set_xy(x, y)
+        t = txt(title).upper()
+        if XPos is not None and YPos is not None:
+            pdf.multi_cell(w, lh - 1, t, new_x=XPos.LEFT, new_y=YPos.NEXT)
+        else:
+            pdf.multi_cell(w, lh - 1, t)
+        y = pdf.get_y()
+        pdf.set_draw_color(229, 231, 235)
+        pdf.line(x, y + 0.6, x + w, y + 0.6)
+        pdf.set_text_color(17, 24, 39)
+        return y + 2.0
+
+    # Header
+    meta = data.get("meta") or {}
+    name = (meta.get("nombre_completo") or "").strip() or fallback_title.strip()
+    subtitle = (meta.get("titulo_profesional") or "").strip() or (
+        meta.get("objetivo_cv") or ""
+    ).strip()
+    contact = _contact_line(meta)
+
+    y = page_top
+    if name:
+        set_font(title_sz, bold=True)
+        pdf.set_text_color(17, 24, 39)
+        pdf.set_xy(page_left, y)
+        if XPos is not None and YPos is not None:
+            pdf.multi_cell(
+                page_width,
+                8,
+                txt(name).upper(),
+                new_x=XPos.LEFT,
+                new_y=YPos.NEXT,
+            )
+        else:
+            pdf.multi_cell(page_width, 8, txt(name).upper())
+        y = pdf.get_y()
+    if subtitle:
+        set_font(subtitle_sz, bold=False)
+        pdf.set_text_color(30, 90, 140)
+        y = write_block(page_left, y + 1, page_width, subtitle, subtitle_sz)
+    if contact:
+        set_font(small_sz)
+        pdf.set_text_color(75, 85, 99)
+        y += 1
+        for label, val in contact:
+            line = f"{label.upper()}  {val}"
+            y = write_block(page_left, y, page_width, line, small_sz)
+    y += 2
+    pdf.set_draw_color(209, 213, 219)
+    pdf.line(page_left, y, page_right, y)
+    y += 4
+    pdf.set_text_color(17, 24, 39)
+
+    # Column geometry
+    col_gap = 8
+    aside_w = max(52.0, page_width * 0.34)
+    main_w = page_width - aside_w - col_gap
+    aside_x = page_left
+    main_x = aside_x + aside_w + col_gap
+    aside_y = y
+    main_y = y
+
+    # Aside content
+    certs = data.get("certificaciones") or []
+    if isinstance(certs, list) and certs:
+        aside_y = section_title(aside_x, aside_y, aside_w, "Certificaciones")
+        for c in certs:
+            if isinstance(c, dict):
+                name_c = (c.get("nombre") or c.get("titulo") or "").strip()
+                desc_c = (c.get("descripcion") or c.get("detalle") or "").strip()
+                if name_c:
+                    set_font(body_sz, bold=True)
+                    aside_y = write_block(aside_x, aside_y, aside_w, name_c, body_sz)
+                if desc_c:
+                    aside_y = write_block(aside_x, aside_y, aside_w, desc_c, small_sz)
+            else:
+                aside_y = write_block(aside_x, aside_y, aside_w, c, small_sz)
+            aside_y += 1
+        aside_y += 1
+
+    strengths = data.get("fortalezas") or []
+    if isinstance(strengths, list) and strengths:
+        aside_y = section_title(aside_x, aside_y, aside_w, "Fortalezas")
+        for s in strengths:
+            if isinstance(s, dict):
+                st = (s.get("titulo") or s.get("nombre") or "").strip()
+                sd = (s.get("descripcion") or "").strip()
+                line = st if not sd else f"{st}: {sd}" if st else sd
+                if line:
+                    aside_y = write_block(aside_x, aside_y, aside_w, f"• {line}", small_sz)
+            else:
+                aside_y = write_block(aside_x, aside_y, aside_w, f"• {s}", small_sz)
+        aside_y += 2
+
+    hab = data.get("habilidades") or {}
+    perfil_kw = (data.get("perfil_profesional") or {}).get("palabras_clave") or []
+    tech = _merge_tecnicas_lists(hab.get("tecnicas"), perfil_kw)
+    soft = hab.get("blandas") or []
+    langs = hab.get("idiomas") or []
+    if tech or soft or langs:
+        aside_y = section_title(aside_x, aside_y, aside_w, "Habilidades")
+        if tech:
+            set_font(small_sz, bold=True)
+            aside_y = write_block(aside_x, aside_y, aside_w, "Técnicas", small_sz)
+            aside_y = write_block(aside_x, aside_y, aside_w, ", ".join(str(t) for t in tech), small_sz)
+            aside_y += 1
+        if soft:
+            set_font(small_sz, bold=True)
+            aside_y = write_block(aside_x, aside_y, aside_w, "Blandas", small_sz)
+            for item in soft:
+                aside_y = write_block(aside_x, aside_y, aside_w, f"• {item}", small_sz)
+            aside_y += 1
+        if langs:
+            set_font(small_sz, bold=True)
+            aside_y = write_block(aside_x, aside_y, aside_w, "Idiomas", small_sz)
+            for item in langs:
+                aside_y = write_block(aside_x, aside_y, aside_w, f"• {item}", small_sz)
+            aside_y += 1
+
+    # Main content
+    perfil = data.get("perfil_profesional") or {}
+    resumen = (perfil.get("resumen") or "").strip()
+    if resumen:
+        main_y = section_title(main_x, main_y, main_w, "Perfil profesional")
+        main_y = write_block(main_x, main_y, main_w, resumen, body_sz)
+        main_y += 2
+
+    exp = data.get("experiencia") or []
+    if isinstance(exp, list) and exp:
+        main_y = section_title(main_x, main_y, main_w, "Experiencia")
+        for item in exp:
+            if not isinstance(item, dict):
+                main_y = write_block(main_x, main_y, main_w, item, body_sz)
+                continue
+            cargo = (item.get("cargo") or "").strip()
+            org = (item.get("empresa") or "").strip()
+            drange = _exp_date_range(item)
+            loc = (item.get("ubicacion") or "").strip()
+            title_line = " · ".join(x for x in (cargo, org) if x)
+            if title_line:
+                set_font(role_sz, bold=True)
+                main_y = write_block(main_x, main_y, main_w, title_line, role_sz)
+            meta_line = " | ".join(x for x in (drange, loc) if x)
+            if meta_line:
+                pdf.set_text_color(107, 114, 128)
+                main_y = write_block(main_x, main_y, main_w, meta_line, small_sz)
+                pdf.set_text_color(17, 24, 39)
+            for label, key in (("Responsabilidades", "responsabilidades"), ("Logros", "logros")):
+                val = item.get(key)
+                if not val:
+                    continue
+                set_font(small_sz, bold=True)
+                main_y = write_block(main_x, main_y + 0.5, main_w, f"{label}:", small_sz)
+                if isinstance(val, list):
+                    for row in val:
+                        main_y = write_block(main_x, main_y, main_w, f"• {row}", small_sz)
+                else:
+                    main_y = write_block(main_x, main_y, main_w, str(val), small_sz)
+            main_y += 2
+
+    edu = data.get("educacion") or []
+    if isinstance(edu, list) and edu:
+        main_y = section_title(main_x, main_y, main_w, "Educación")
+        for item in edu:
+            if not isinstance(item, dict):
+                main_y = write_block(main_x, main_y, main_w, item, body_sz)
+                continue
+            titulo = (item.get("titulo") or "").strip()
+            inst = (item.get("institucion") or "").strip()
+            loc = (item.get("ubicacion") or "").strip()
+            if titulo or inst:
+                set_font(role_sz, bold=True)
+                main_y = write_block(main_x, main_y, main_w, " · ".join(x for x in (titulo, inst) if x), role_sz)
+            extra: list[str] = []
+            if item.get("fecha_inicio") or item.get("fecha_fin"):
+                extra.append(
+                    " – ".join(
+                        x for x in (item.get("fecha_inicio") or "", item.get("fecha_fin") or "") if x
+                    )
+                )
+            if item.get("estado"):
+                extra.append(str(item.get("estado")))
+            meta_line = " | ".join(x for x in (*extra, loc) if x)
+            if meta_line:
+                pdf.set_text_color(107, 114, 128)
+                main_y = write_block(main_x, main_y, main_w, meta_line, small_sz)
+                pdf.set_text_color(17, 24, 39)
+            main_y += 1.5
+
+    proy = data.get("proyectos") or []
+    if isinstance(proy, list) and proy:
+        main_y = section_title(main_x, main_y, main_w, "Proyectos")
+        for item in proy:
+            if not isinstance(item, dict):
+                main_y = write_block(main_x, main_y, main_w, item, body_sz)
+                continue
+            name_p = (item.get("nombre") or "Proyecto").strip()
+            set_font(role_sz, bold=True)
+            main_y = write_block(main_x, main_y, main_w, name_p, role_sz)
+            if item.get("descripcion"):
+                main_y = write_block(main_x, main_y, main_w, str(item["descripcion"]), body_sz)
+            tec = item.get("tecnologias")
+            if isinstance(tec, list) and tec:
+                main_y = write_block(main_x, main_y, main_w, "Tecnologías: " + ", ".join(str(t) for t in tec), small_sz)
+            if item.get("enlace"):
+                main_y = write_block(main_x, main_y, main_w, "Enlace: " + str(item["enlace"]), small_sz)
+            main_y += 1.5
+
+    return bytes(pdf.output())
+
+
+def markdown_to_pdf_bytes(md: str) -> bytes:
+    """
+    Compatibilidad temporal: genera un PDF básico desde texto Markdown.
+    """
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.set_margins(14, 14, 14)
+    pdf.add_page()
+    font_path = _unicode_font_path()
     if font_path:
         pdf.add_font("CvBody", "", str(font_path))
-        font_family = "CvBody"
-        pdf.set_font("CvBody", size=size_body)
+        pdf.set_font("CvBody", size=10)
     else:
+        pdf.set_font("Helvetica", size=10)
         md = _fold_latin_fallback(md)
-        pdf.set_font("Helvetica", size=size_body)
-
-    def _write_line(text: str, height: float) -> None:
-        # En fpdf2, fijamos explícitamente el salto para evitar drift horizontal.
-        pdf.multi_cell(
-            page_w,
-            height,
-            text,
-            new_x="LMARGIN",
-            new_y="NEXT",
-        )
-
     for raw in md.split("\n"):
         line = _strip_inline_markdown(raw.rstrip())
         if not line:
-            pdf.set_x(pdf.l_margin)
-            pdf.ln(line_h * 0.35)
+            pdf.ln(2)
             continue
-        if font_path:
-            pdf.set_font(font_family, size=size_body)
+        pdf.set_x(pdf.l_margin)
+        if XPos is not None and YPos is not None:
+            pdf.multi_cell(pdf.epw, 5, line, new_x=XPos.LEFT, new_y=YPos.NEXT)
         else:
-            pdf.set_font("Helvetica", size=size_body)
-
-        if line.startswith("### "):
-            pdf.set_font(font_family if font_path else "Helvetica", size=size_h3)
-            _write_line(line[4:], line_h + 1)
-        elif line.startswith("## "):
-            pdf.set_font(font_family if font_path else "Helvetica", size=size_h2)
-            _write_line(line[3:], line_h + 1)
-        elif line.startswith("# "):
-            pdf.set_font(font_family if font_path else "Helvetica", size=size_h1)
-            _write_line(line[2:], line_h + 1)
-        elif line.startswith(("- ", "* ")):
-            if font_path:
-                pdf.set_font(font_family, size=size_body)
-            else:
-                pdf.set_font("Helvetica", size=size_body)
-            _write_line(f"  - {line[2:]}", line_h)
-        else:
-            if font_path:
-                pdf.set_font(font_family, size=size_body)
-            else:
-                pdf.set_font("Helvetica", size=size_body)
-            _write_line(line, line_h)
-
+            pdf.multi_cell(pdf.epw, 5, line)
     return bytes(pdf.output())
