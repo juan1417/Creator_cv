@@ -710,9 +710,20 @@ def markdown_to_pdf_bytes(md: str) -> bytes:
         md = _fold_latin_fallback(md)
         pdf.set_font("Helvetica", size=size_body)
 
+    def _write_line(text: str, height: float) -> None:
+        # En fpdf2, fijamos explícitamente el salto para evitar drift horizontal.
+        pdf.multi_cell(
+            page_w,
+            height,
+            text,
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+
     for raw in md.split("\n"):
         line = _strip_inline_markdown(raw.rstrip())
         if not line:
+            pdf.set_x(pdf.l_margin)
             pdf.ln(line_h * 0.35)
             continue
         if font_path:
@@ -722,24 +733,24 @@ def markdown_to_pdf_bytes(md: str) -> bytes:
 
         if line.startswith("### "):
             pdf.set_font(font_family if font_path else "Helvetica", size=size_h3)
-            pdf.multi_cell(page_w, line_h + 1, line[4:])
+            _write_line(line[4:], line_h + 1)
         elif line.startswith("## "):
             pdf.set_font(font_family if font_path else "Helvetica", size=size_h2)
-            pdf.multi_cell(page_w, line_h + 1, line[3:])
+            _write_line(line[3:], line_h + 1)
         elif line.startswith("# "):
             pdf.set_font(font_family if font_path else "Helvetica", size=size_h1)
-            pdf.multi_cell(page_w, line_h + 1, line[2:])
+            _write_line(line[2:], line_h + 1)
         elif line.startswith(("- ", "* ")):
             if font_path:
                 pdf.set_font(font_family, size=size_body)
             else:
                 pdf.set_font("Helvetica", size=size_body)
-            pdf.multi_cell(page_w, line_h, f"  - {line[2:]}")
+            _write_line(f"  - {line[2:]}", line_h)
         else:
             if font_path:
                 pdf.set_font(font_family, size=size_body)
             else:
                 pdf.set_font("Helvetica", size=size_body)
-            pdf.multi_cell(page_w, line_h, line)
+            _write_line(line, line_h)
 
     return bytes(pdf.output())
