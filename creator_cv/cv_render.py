@@ -418,20 +418,18 @@ def context_to_preview_document_html(
         "body{margin:0;background:#fff;color:#111827;}"
         ".preview-doc-stage{padding:0;background:transparent;border-radius:0;}"
         ".cv-paper{max-width:none;min-height:auto;box-shadow:none;border-radius:0;}"
-        ".cv-paper-inner.cv-ref-doc{padding:10mm 12mm;font-size:10pt;}"
-        "@media print{"
-        ".cv-ref-doc .cv-ref__header{break-after:auto !important;page-break-after:auto !important;}"
-        "/* Evita el hueco grande: forzamos layout printable sin grid */"
-        ".cv-ref-doc .cv-ref__grid{display:block !important;break-before:auto !important;page-break-before:auto !important;}"
-        ".cv-ref-doc .cv-ref__aside,.cv-ref-doc .cv-ref__main{display:inline-block !important;vertical-align:top;}"
-        ".cv-ref-doc .cv-ref__aside{width:34% !important;margin-right:3% !important;}"
-        ".cv-ref-doc .cv-ref__main{width:63% !important;}"
-        ".cv-ref-doc .cv-ref__section,.cv-ref-doc .cv-ref__timeline-item,.cv-ref-doc .cv-ref__edu-item{break-inside:auto !important;page-break-inside:auto !important;}"
-        "}"
+        ".cv-paper-inner.cv-ref-doc.cv-ref-doc--pdf{padding:10mm 12mm;font-size:10pt;}"
+        ".cv-ref-doc--pdf .cv-ref{break-inside:auto !important;page-break-inside:auto !important;}"
+        ".cv-ref-doc--pdf .cv-ref__header{break-after:auto !important;page-break-after:auto !important;}"
+        "/* Layout de impresion estable: una columna (evita huecos por paginacion) */"
+        ".cv-ref-doc--pdf .cv-ref__grid{display:block !important;}"
+        ".cv-ref-doc--pdf .cv-ref__aside,.cv-ref-doc--pdf .cv-ref__main{display:block !important;width:auto !important;max-width:none !important;padding:0 !important;margin:0 !important;overflow:visible !important;}"
+        ".cv-ref-doc--pdf .cv-ref__aside{margin-bottom:0.8rem !important;}"
+        ".cv-ref-doc--pdf .cv-ref__section,.cv-ref-doc--pdf .cv-ref__timeline-item,.cv-ref-doc--pdf .cv-ref__edu-item{break-inside:auto !important;page-break-inside:auto !important;}"
         "@page{size:A4;margin:0;}"
         "</style></head><body>"
         '<div class="preview-doc-stage"><div class="cv-paper">'
-        '<div class="cv-paper-inner cv-ref-doc">'
+        '<div class="cv-paper-inner cv-ref-doc cv-ref-doc--pdf">'
         f"{preview_html}"
         "</div></div></div></body></html>"
     )
@@ -443,6 +441,19 @@ def _css_from_app(root_path: str) -> str:
         return css_path.read_text(encoding="utf-8")
     except OSError as e:
         raise RuntimeError(f"No se pudo leer CSS del preview: {css_path}") from e
+
+
+def _render_html_to_pdf_with_weasyprint(html_doc: str) -> bytes:
+    try:
+        from weasyprint import HTML
+    except Exception as e:  # pragma: no cover - dependencia opcional en runtime
+        raise RuntimeError(
+            "WeasyPrint no está disponible. Instala con: uv add weasyprint"
+        ) from e
+    try:
+        return HTML(string=html_doc).write_pdf()
+    except Exception as e:
+        raise RuntimeError(f"WeasyPrint no pudo renderizar el PDF: {e}") from e
 
 
 async def _render_html_to_pdf_with_playwright(html_doc: str) -> bytes:
@@ -483,7 +494,12 @@ def context_to_pdf_bytes_from_preview(
         css_text=css_text,
         fallback_title=fallback_title,
     )
-    return asyncio.run(_render_html_to_pdf_with_playwright(html_doc))
+    # 1) WeasyPrint suele paginar columnas mejor para CV largos.
+    try:
+        return _render_html_to_pdf_with_weasyprint(html_doc)
+    except RuntimeError:
+        # 2) Fallback a Chromium/Playwright.
+        return asyncio.run(_render_html_to_pdf_with_playwright(html_doc))
 
 
 def _fmt_val(v: Any) -> str:

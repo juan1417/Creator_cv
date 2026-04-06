@@ -57,4 +57,18 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     app.register_blueprint(main_bp)
 
+    @app.after_request
+    def _disable_cache_for_dynamic_pages(response):
+        # Evita formularios/tokens viejos cuando hay varias recargas en dev.
+        if not (response.cache_control and response.cache_control.public):
+            if not str(response.mimetype or "").startswith(
+                ("text/css", "application/javascript", "image/")
+            ):
+                response.headers["Cache-Control"] = (
+                    "no-store, no-cache, must-revalidate, max-age=0"
+                )
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Expires"] = "0"
+        return response
+
     return app
