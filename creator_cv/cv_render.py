@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import html
 import io
 import json
@@ -396,6 +397,93 @@ def context_to_structured_preview_html(
 
     parts.append("</div></div></article>")
     return "".join(parts)
+
+
+def context_to_preview_document_html(
+    data: dict[str, Any],
+    *,
+    css_text: str,
+    fallback_title: str = "",
+) -> str:
+    """Documento HTML completo para exportación fiel del preview."""
+    preview_html = context_to_structured_preview_html(data, fallback_title=fallback_title)
+    doc_title = _e(fallback_title or "CV")
+    return (
+        "<!DOCTYPE html>"
+        '<html lang="es"><head><meta charset="utf-8" />'
+        '<meta name="viewport" content="width=device-width, initial-scale=1" />'
+        f"<title>{doc_title}</title>"
+        f"<style>{css_text}</style>"
+        "<style>"
+        "body{margin:0;background:#fff;color:#111827;}"
+        ".preview-doc-stage{padding:0;background:transparent;border-radius:0;}"
+        ".cv-paper{max-width:none;min-height:auto;box-shadow:none;border-radius:0;}"
+        ".cv-paper-inner.cv-ref-doc{padding:10mm 12mm;font-size:10pt;}"
+        "@media print{"
+        ".cv-ref-doc .cv-ref__header{break-after:auto !important;page-break-after:auto !important;}"
+        "/* Evita el hueco grande: forzamos layout printable sin grid */"
+        ".cv-ref-doc .cv-ref__grid{display:block !important;break-before:auto !important;page-break-before:auto !important;}"
+        ".cv-ref-doc .cv-ref__aside,.cv-ref-doc .cv-ref__main{display:inline-block !important;vertical-align:top;}"
+        ".cv-ref-doc .cv-ref__aside{width:34% !important;margin-right:3% !important;}"
+        ".cv-ref-doc .cv-ref__main{width:63% !important;}"
+        ".cv-ref-doc .cv-ref__section,.cv-ref-doc .cv-ref__timeline-item,.cv-ref-doc .cv-ref__edu-item{break-inside:auto !important;page-break-inside:auto !important;}"
+        "}"
+        "@page{size:A4;margin:0;}"
+        "</style></head><body>"
+        '<div class="preview-doc-stage"><div class="cv-paper">'
+        '<div class="cv-paper-inner cv-ref-doc">'
+        f"{preview_html}"
+        "</div></div></div></body></html>"
+    )
+
+
+def _css_from_app(root_path: str) -> str:
+    css_path = Path(root_path) / "static" / "css" / "app.css"
+    try:
+        return css_path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise RuntimeError(f"No se pudo leer CSS del preview: {css_path}") from e
+
+
+async def _render_html_to_pdf_with_playwright(html_doc: str) -> bytes:
+    try:
+        from playwright.async_api import async_playwright
+    except Exception as e:  # pragma: no cover - dependencia opcional en runtime
+        raise RuntimeError(
+            "Playwright no está disponible. Instala con: uv add playwright "
+            "y luego: uv run playwright install chromium"
+        ) from e
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        try:
+            page = await browser.new_page()
+            await page.set_content(html_doc, wait_until="networkidle")
+            return await page.pdf(
+                format="A4",
+                print_background=True,
+                margin={"top": "0mm", "right": "0mm", "bottom": "0mm", "left": "0mm"},
+            )
+        finally:
+            await browser.close()
+
+
+def context_to_pdf_bytes_from_preview(
+    data: dict[str, Any],
+    *,
+    root_path: str,
+    fallback_title: str = "",
+) -> bytes:
+    """
+    Renderiza PDF desde el mismo HTML/CSS del preview (fiel al estilo/íconos).
+    """
+    css_text = _css_from_app(root_path)
+    html_doc = context_to_preview_document_html(
+        data,
+        css_text=css_text,
+        fallback_title=fallback_title,
+    )
+    return asyncio.run(_render_html_to_pdf_with_playwright(html_doc))
 
 
 def _fmt_val(v: Any) -> str:

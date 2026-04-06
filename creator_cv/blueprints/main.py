@@ -45,6 +45,7 @@ from creator_cv.mcp_interview import (
 )
 from creator_cv.cv_patch import apply_cv_context_patch
 from creator_cv.cv_render import (
+    context_to_pdf_bytes_from_preview,
     context_to_pdf_bytes,
     context_has_preview_content,
     context_to_structured_preview_html,
@@ -584,7 +585,17 @@ def cv_export_pdf(cv_id: int):
     except (json.JSONDecodeError, ValueError):
         abort(400)
     try:
-        pdf_bytes = context_to_pdf_bytes(data, fallback_title=cv.title)
+        try:
+            pdf_bytes = context_to_pdf_bytes_from_preview(
+                data,
+                root_path=current_app.root_path,
+                fallback_title=cv.title,
+            )
+        except RuntimeError:
+            current_app.logger.warning(
+                "export_pdf_preview_renderer_unavailable_fallback_to_fpdf"
+            )
+            pdf_bytes = context_to_pdf_bytes(data, fallback_title=cv.title)
     except Exception:
         current_app.logger.exception("export_pdf")
         abort(500)
