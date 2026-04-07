@@ -5,7 +5,11 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from creator_cv.context_sync import EXPECTED_TOP_KEYS, validate_context_shape
+from creator_cv.context_sync import (
+    EXPECTED_TOP_KEYS,
+    merge_context_with_template,
+    validate_context_shape,
+)
 
 # Raíces que el chat puede proponer (incl. campos extra del template real).
 ALLOWED_PATCH_ROOTS = set(EXPECTED_TOP_KEYS) | {"certificaciones", "fortalezas"}
@@ -35,5 +39,7 @@ def apply_cv_context_patch(
             out[k] = _deep_merge_dict(out[k], v)
         else:
             out[k] = copy.deepcopy(v)
+    # Completa claves faltantes del esquema (p. ej. tras un parche parcial).
+    out = merge_context_with_template(out)
     validate_context_shape(out)
     return out

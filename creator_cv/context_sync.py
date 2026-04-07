@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -12,9 +13,12 @@ _ROOT = _PKG_DIR.parent
 DEFAULT_REL_ACTIVE = Path("mcp-ia-preguntas/context/cv-context.active.json")
 TEMPLATE_REL = Path("mcp-ia-preguntas/context/cv-context.template.json")
 
+# Debe coincidir con las claves de raíz de `cv-context.template.json`.
 EXPECTED_TOP_KEYS = frozenset(
     {
         "meta",
+        "certificaciones",
+        "fortalezas",
         "perfil_profesional",
         "experiencia",
         "educacion",
@@ -63,13 +67,37 @@ def validate_context_shape(data: Any) -> None:
         )
 
 
+def merge_context_with_template(user: dict[str, Any]) -> dict[str, Any]:
+    """
+    Rellena claves y subobjetos faltantes con la plantilla oficial.
+    Los valores del usuario siempre prevalecen.
+    """
+    base = copy.deepcopy(load_template_defaults())
+    return _deep_merge(base, user)
+
+
+def _deep_merge(base: Any, user: Any) -> Any:
+    if isinstance(base, dict) and isinstance(user, dict):
+        out = dict(base)
+        for key, uval in user.items():
+            if key in out and isinstance(out[key], dict) and isinstance(uval, dict):
+                out[key] = _deep_merge(out[key], uval)
+            else:
+                out[key] = uval
+        return out
+    return user
+
+
 def read_context_file(path: Path) -> dict[str, Any]:
     if not path.is_file():
         data = load_template_defaults()
         validate_context_shape(data)
         return data
     with path.open(encoding="utf-8") as f:
-        data = json.load(f)
+        parsed = json.load(f)
+    if not isinstance(parsed, dict):
+        raise ValueError("El contexto debe ser un objeto JSON (raíz: objeto).")
+    data = merge_context_with_template(parsed)
     validate_context_shape(data)
     return data
 
@@ -88,6 +116,12 @@ def parse_cv_context_json(raw: str | None) -> dict[str, Any]:
         data = load_template_defaults()
         validate_context_shape(data)
         return data
-    data = json.loads(raw)
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"JSON inválido: {e}") from e
+    if not isinstance(parsed, dict):
+        raise ValueError("El contexto debe ser un objeto JSON (raíz: objeto).")
+    data = merge_context_with_template(parsed)
     validate_context_shape(data)
     return data

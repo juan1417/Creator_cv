@@ -481,15 +481,15 @@ def cv_edit(cv_id: int):
     if request.method == "POST":
         raw = request.form.get("context_json") or ""
         try:
-            parse_cv_context_json(raw)
-        except (json.JSONDecodeError, ValueError) as e:
+            merged = parse_cv_context_json(raw)
+        except ValueError as e:
             flash(str(e), "error")
             return render_template(
                 "cv_edit.html",
                 cv=cv,
                 context_text=raw,
             ), 400
-        cv.context_json = raw.strip() or None
+        cv.context_json = json.dumps(merged, ensure_ascii=False, indent=2)
         db.session.commit()
         flash("Contexto guardado en la base de datos.", "success")
         return redirect(url_for("main.cv_edit", cv_id=cv.id))

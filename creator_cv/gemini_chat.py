@@ -117,32 +117,85 @@ Contexto JSON actual del CV (fuente de verdad; puedes proponer actualizaciones s
 
 Formato de salida:
 1) Responde en lenguaje natural al usuario (preguntas y comentarios).
-2) SOLO si la persona confirmó datos nuevos o rellenó campos que deben guardarse en el CV, añade al FINAL un bloque exactamente así (si no hay nada nuevo confirmado, NO incluyas el bloque):
+2) SOLO si la persona confirmó datos nuevos o rellenó campos que deben guardarse en el CV, añade al FINAL un bloque con el JSON parcial. Usa una de estas formas (equivalentes):
 ```cv-context
-{{ ... objeto JSON parcial con las claves de nivel superior a fusionar (mismo esquema que el contexto: meta, perfil_profesional, experiencia, educacion, habilidades, proyectos, etc.) ... }}
+{{ ... }}
+```
+o
+```json
+{{ ... }}
 ```
 
-En el bloque cv-context: objetos anidados se fusionan con lo existente; listas como "experiencia" reemplazan solo si incluyes la lista completa que la persona validó en este turno — si no estás seguro, omite el bloque y sigue preguntando.
+El objeto debe incluir solo claves de nivel superior del CV (meta, certificaciones, fortalezas, perfil_profesional, experiencia, educacion, habilidades, proyectos, recursos_actuales, restricciones, dudas_pendientes). Objetos anidados se fusionan; listas reemplazan solo si la persona validó la lista completa — si no estás seguro, omite el bloque y sigue preguntando.
 """
+
+
+def _looks_like_cv_patch(obj: dict[str, Any]) -> bool:
+    from creator_cv.context_sync import EXPECTED_TOP_KEYS
+
+    return bool(set(obj.keys()) & EXPECTED_TOP_KEYS)
+
+
+def _try_parse_patch_object(raw: str) -> dict[str, Any] | None:
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        # JSON típico roto por el modelo: coma final antes de } o ]
+        fixed = re.sub(r",\s*([}\]])", r"\1", raw)
+        try:
+            data = json.loads(fixed)
+        except json.JSONDecodeError:
+            return None
+    if isinstance(data, dict) and _looks_like_cv_patch(data):
+        return data
+    return None
 
 
 def extract_cv_context_block(assistant_text: str) -> tuple[str, dict[str, Any] | None]:
     """
-    Devuelve (texto sin el bloque cv-context para mostrar, parche dict o None).
+    Devuelve (texto sin el bloque técnico para mostrar, parche dict o None).
+    Acepta ```cv-context```, ```json``` y otros fences si el interior es JSON de CV.
     """
-    pattern = re.compile(r"```cv-context\s*([\s\S]*?)```", re.IGNORECASE)
-    m = pattern.search(assistant_text)
-    if not m:
-        return assistant_text.strip(), None
-    raw = m.group(1).strip()
-    try:
-        patch = json.loads(raw)
-    except json.JSONDecodeError:
-        return assistant_text.strip(), None
-    if not isinstance(patch, dict):
-        return assistant_text.strip(), None
-    visible = (assistant_text[: m.start()] + assistant_text[m.end() :]).strip()
-    return visible, patch
+    text = (assistant_text or "").strip()
+
+    def try_labeled_fence(label: str) -> tuple[str, dict[str, Any]] | None:
+        pattern = re.compile(
+            rf"```{re.escape(label)}\s*([\s\S]*?)```",
+            re.IGNORECASE,
+        )
+        last_ok: tuple[int, int, dict[str, Any]] | None = None
+        for m in pattern.finditer(text):
+            patch = _try_parse_patch_object(m.group(1))
+            if patch:
+                last_ok = (m.start(), m.end(), patch)
+        if last_ok:
+            start, end, patch = last_ok
+            visible = (text[:start] + text[end:]).strip()
+            return visible, patch
+        return None
+
+    for label in ("cv-context", "json", "JSON"):
+        got = try_labeled_fence(label)
+        if got:
+            return got
+
+    # Cualquier ``` ... ``` cuyo interior sea un objeto CV (p. ej. ``` ``json con typo)
+    generic = re.compile(r"```\s*([\w+-]*)\s*([\s\S]*?)```", re.IGNORECASE)
+    candidates: list[tuple[int, int, dict[str, Any]]] = []
+    for m in generic.finditer(text):
+        patch = _try_parse_patch_object(m.group(2))
+        if patch:
+            candidates.append((m.start(), m.end(), patch))
+    if candidates:
+        # Preferir el último bloque válido (suele ser el parche final).
+        start, end, patch = max(candidates, key=lambda x: x[0])
+        visible = (text[:start] + text[end:]).strip()
+        return visible, patch
+
+    return text, None
 
 
 def run_chat_turn(
