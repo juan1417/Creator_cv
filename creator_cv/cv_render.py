@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import ast
 import html
 import io
 import json
@@ -153,25 +154,40 @@ def _portfolio_url(meta: dict[str, Any]) -> str:
     return value
 
 
-def _collect_logros(exp: Any) -> list[str]:
-    out: list[str] = []
+def _collect_logros(exp: Any) -> list[tuple[str, str]]:
+    out: list[tuple[str, str]] = []
     if not isinstance(exp, list):
         return out
 
-    def _normalize_logro(raw: Any) -> str:
+    def _to_parts(raw: Any) -> tuple[str, str]:
+        def _from_mapping(obj: dict[str, Any]) -> tuple[str, str]:
+            title = str(obj.get("nombre") or obj.get("titulo") or "").strip()
+            desc = str(obj.get("descripcion") or obj.get("detalle") or "").strip()
+            if title and desc:
+                return title, desc
+            if desc:
+                return "", desc
+            if title:
+                return title, ""
+            return "", ""
+
         if isinstance(raw, dict):
             # Soporta casos incorrectos donde llegó un objeto tipo proyecto.
-            nombre = str(raw.get("nombre") or raw.get("titulo") or "").strip()
-            desc = str(raw.get("descripcion") or raw.get("detalle") or "").strip()
-            if nombre and desc:
-                return f"{nombre}: {desc}"
-            if desc:
-                return desc
-            if nombre:
-                return nombre
-            return ""
+            return _from_mapping(raw)
         s = str(raw).strip()
-        return s
+        if s.startswith("{") and s.endswith("}"):
+            # También soporta strings con repr de dict de Python: "{'nombre': ...}".
+            parsed: Any | None = None
+            try:
+                parsed = json.loads(s)
+            except Exception:
+                try:
+                    parsed = ast.literal_eval(s)
+                except Exception:
+                    parsed = None
+            if isinstance(parsed, dict):
+                return _from_mapping(parsed)
+        return "", s
 
     for item in exp:
         if not isinstance(item, dict):
@@ -179,13 +195,13 @@ def _collect_logros(exp: Any) -> list[str]:
         raw = item.get("logros")
         if isinstance(raw, list):
             for row in raw:
-                s = _normalize_logro(row)
-                if s:
-                    out.append(s)
+                title, desc = _to_parts(row)
+                if title or desc:
+                    out.append((title, desc))
         elif raw:
-            s = _normalize_logro(raw)
-            if s:
-                out.append(s)
+            title, desc = _to_parts(raw)
+            if title or desc:
+                out.append((title, desc))
     return out
 
 
@@ -347,10 +363,15 @@ def context_to_structured_preview_html(
     if logros_globales:
         parts.append('<section class="cv-ref__section">')
         parts.append('<h2 class="cv-ref__section-title">Logros clave</h2>')
-        parts.append('<ul class="cv-ref__list">')
-        for row in logros_globales:
-            parts.append(f"<li>{_e(row)}</li>")
-        parts.append("</ul>")
+        parts.append('<div class="cv-ref__achievements">')
+        for title, desc in logros_globales:
+            parts.append('<article class="cv-ref__achievement">')
+            if title:
+                parts.append(f'<h3 class="cv-ref__achievement-title">{_e(title)}</h3>')
+            if desc:
+                parts.append(f'<p class="cv-ref__achievement-desc">{_e(desc)}</p>')
+            parts.append("</article>")
+        parts.append("</div>")
         parts.append("</section>")
 
     if isinstance(exp, list) and exp:
