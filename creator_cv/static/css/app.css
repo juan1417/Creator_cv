@@ -818,6 +818,34 @@ h2 {
   color: #9ca3af;
 }
 
+.cv-ref-doc .cv-ref__achievements {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.cv-ref-doc .cv-ref__achievement {
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid #1e5a8c;
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  background: #f9fafb;
+}
+
+.cv-ref-doc .cv-ref__achievement-title {
+  margin: 0 0 0.2rem;
+  font-size: 0.95rem;
+  line-height: 1.25;
+  color: #111827;
+  font-weight: 700;
+}
+
+.cv-ref-doc .cv-ref__achievement-desc {
+  margin: 0;
+  color: #1f2937;
+  font-size: 0.93rem;
+  line-height: 1.45;
+}
+
 .cv-ref-doc .cv-ref__para {
   margin: 0 0 0.55rem;
   color: #374151;
