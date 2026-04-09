@@ -846,6 +846,12 @@ h2 {
   line-height: 1.45;
 }
 
+.cv-ref-doc .cv-ref__achievement-meta {
+  margin: 0.35rem 0 0;
+  font-size: 0.84rem;
+  color: #4b5563;
+}
+
 .cv-ref-doc .cv-ref__para {
   margin: 0 0 0.55rem;
   color: #374151;

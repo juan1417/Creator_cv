@@ -154,25 +154,28 @@ def _portfolio_url(meta: dict[str, Any]) -> str:
     return value
 
 
-def _collect_logros(exp: Any) -> list[tuple[str, str]]:
-    out: list[tuple[str, str]] = []
+def _collect_logros(exp: Any) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
     if not isinstance(exp, list):
         return out
 
-    def _to_parts(raw: Any) -> tuple[str, str]:
-        def _from_mapping(obj: dict[str, Any]) -> tuple[str, str]:
+    def _to_item(raw: Any) -> dict[str, Any]:
+        def _from_mapping(obj: dict[str, Any]) -> dict[str, Any]:
             title = str(obj.get("nombre") or obj.get("titulo") or "").strip()
             desc = str(obj.get("descripcion") or obj.get("detalle") or "").strip()
-            if title and desc:
-                return title, desc
-            if desc:
-                return "", desc
-            if title:
-                return title, ""
-            return "", ""
+            tech_raw = obj.get("tecnologias")
+            tecnologias: list[str] = []
+            if isinstance(tech_raw, list):
+                tecnologias = [str(x).strip() for x in tech_raw if str(x).strip()]
+            enlace = str(obj.get("enlace") or "").strip()
+            return {
+                "title": title,
+                "desc": desc,
+                "tecnologias": tecnologias,
+                "enlace": enlace,
+            }
 
         if isinstance(raw, dict):
-            # Soporta casos incorrectos donde llegó un objeto tipo proyecto.
             return _from_mapping(raw)
         s = str(raw).strip()
         if s.startswith("{") and s.endswith("}"):
@@ -187,7 +190,7 @@ def _collect_logros(exp: Any) -> list[tuple[str, str]]:
                     parsed = None
             if isinstance(parsed, dict):
                 return _from_mapping(parsed)
-        return "", s
+        return {"title": "", "desc": s, "tecnologias": [], "enlace": ""}
 
     for item in exp:
         if not isinstance(item, dict):
@@ -195,13 +198,13 @@ def _collect_logros(exp: Any) -> list[tuple[str, str]]:
         raw = item.get("logros")
         if isinstance(raw, list):
             for row in raw:
-                title, desc = _to_parts(row)
-                if title or desc:
-                    out.append((title, desc))
+                logro = _to_item(row)
+                if logro["title"] or logro["desc"]:
+                    out.append(logro)
         elif raw:
-            title, desc = _to_parts(raw)
-            if title or desc:
-                out.append((title, desc))
+            logro = _to_item(raw)
+            if logro["title"] or logro["desc"]:
+                out.append(logro)
     return out
 
 
@@ -364,12 +367,27 @@ def context_to_structured_preview_html(
         parts.append('<section class="cv-ref__section">')
         parts.append('<h2 class="cv-ref__section-title">Logros clave</h2>')
         parts.append('<div class="cv-ref__achievements">')
-        for title, desc in logros_globales:
+        for logro in logros_globales:
+            title = str(logro.get("title") or "").strip()
+            desc = str(logro.get("desc") or "").strip()
+            tech = logro.get("tecnologias") or []
+            enlace = str(logro.get("enlace") or "").strip()
             parts.append('<article class="cv-ref__achievement">')
             if title:
                 parts.append(f'<h3 class="cv-ref__achievement-title">{_e(title)}</h3>')
             if desc:
                 parts.append(f'<p class="cv-ref__achievement-desc">{_e(desc)}</p>')
+            if tech:
+                parts.append(
+                    '<p class="cv-ref__achievement-meta"><strong>Tecnologías:</strong> '
+                    f'{_e(", ".join(str(x) for x in tech))}</p>'
+                )
+            if enlace:
+                safe_url = _e(enlace)
+                parts.append(
+                    '<p class="cv-ref__achievement-meta"><strong>Enlace:</strong> '
+                    f'<a class="cv-ref__contact-link" href="{safe_url}" target="_blank" rel="noopener noreferrer">{safe_url}</a></p>'
+                )
             parts.append("</article>")
         parts.append("</div>")
         parts.append("</section>")
