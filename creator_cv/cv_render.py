@@ -32,6 +32,11 @@ def _e(value: Any) -> str:
     return html.escape("" if value is None else str(value))
 
 
+def _is_http_url(value: str) -> bool:
+    s = value.strip().lower()
+    return s.startswith("http://") or s.startswith("https://")
+
+
 def _normalize_link_list(links: Any) -> list[str]:
     """Lista de enlaces o un solo string con URLs separadas por comas."""
     if links is None:
@@ -55,6 +60,7 @@ def _contact_line(meta: dict[str, Any]) -> list[tuple[str, str]]:
         ("Teléfono", "telefono"),
         ("Email", "email"),
         ("LinkedIn", "linkedin"),
+        ("Portafolio", "portafolio"),
         ("Ubicación", "ubicacion"),
     )
     out: list[tuple[str, str]] = []
@@ -167,10 +173,19 @@ def context_to_structured_preview_html(
     if contact:
         parts.append('<ul class="cv-ref__contact" role="list">')
         for label, val in contact:
+            safe_val = _e(val)
+            if _is_http_url(val):
+                rendered_val = (
+                    f'<a class="cv-ref__contact-link" href="{safe_val}" '
+                    'target="_blank" rel="noopener noreferrer">'
+                    f"{safe_val}</a>"
+                )
+            else:
+                rendered_val = f'<span class="cv-ref__contact-val">{safe_val}</span>'
             parts.append(
                 '<li>'
                 f'<span class="cv-ref__contact-label">{_e(label)}</span> '
-                f'<span class="cv-ref__contact-val">{_e(val)}</span>'
+                f"{rendered_val}"
                 "</li>"
             )
         parts.append("</ul>")
