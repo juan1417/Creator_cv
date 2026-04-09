@@ -157,17 +157,33 @@ def _collect_logros(exp: Any) -> list[str]:
     out: list[str] = []
     if not isinstance(exp, list):
         return out
+
+    def _normalize_logro(raw: Any) -> str:
+        if isinstance(raw, dict):
+            # Soporta casos incorrectos donde llegó un objeto tipo proyecto.
+            nombre = str(raw.get("nombre") or raw.get("titulo") or "").strip()
+            desc = str(raw.get("descripcion") or raw.get("detalle") or "").strip()
+            if nombre and desc:
+                return f"{nombre}: {desc}"
+            if desc:
+                return desc
+            if nombre:
+                return nombre
+            return ""
+        s = str(raw).strip()
+        return s
+
     for item in exp:
         if not isinstance(item, dict):
             continue
         raw = item.get("logros")
         if isinstance(raw, list):
             for row in raw:
-                s = str(row).strip()
+                s = _normalize_logro(row)
                 if s:
                     out.append(s)
         elif raw:
-            s = str(raw).strip()
+            s = _normalize_logro(raw)
             if s:
                 out.append(s)
     return out
