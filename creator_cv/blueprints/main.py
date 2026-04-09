@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import timezone
 from typing import Any
 
 from flask import (
@@ -103,6 +104,40 @@ def _get_cv_or_404(cv_id: int, user: User) -> CV:
     if cv is None or cv.user_id != user.id:
         abort(404)
     return cv
+
+
+def _cv_updated_ts(cv: CV) -> float:
+    updated = cv.updated_at
+    if updated is None:
+        return 0.0
+    if updated.tzinfo is None:
+        updated = updated.replace(tzinfo=timezone.utc)
+    return updated.timestamp()
+
+
+def _sync_cv_from_mcp_if_newer(cv: CV) -> bool:
+    """
+    Sincroniza en caliente desde el JSON de MCP si el archivo en disco
+    es más reciente que la última actualización del CV en BD.
+    """
+    path = get_active_context_path(current_app)
+    try:
+        if not path.is_file():
+            return False
+        if path.stat().st_mtime <= _cv_updated_ts(cv):
+            return False
+        data = read_context_file(path)
+    except (OSError, json.JSONDecodeError, ValueError):
+        current_app.logger.exception("sync_from_mcp_if_newer_failed")
+        return False
+
+    new_context = json.dumps(data, ensure_ascii=False, indent=2)
+    if (cv.context_json or "").strip() == new_context.strip():
+        return False
+
+    cv.context_json = new_context
+    db.session.commit()
+    return True
 
 
 @bp.app_context_processor
@@ -494,6 +529,7 @@ def cv_edit(cv_id: int):
         flash("Contexto guardado en la base de datos.", "success")
         return redirect(url_for("main.cv_edit", cv_id=cv.id))
 
+    _sync_cv_from_mcp_if_newer(cv)
     text = cv.context_json or ""
     if not text.strip():
         text = json.dumps(
@@ -540,6 +576,7 @@ def cv_sync_to_mcp(cv_id: int):
 def cv_preview(cv_id: int):
     user = get_dev_user()
     cv = _get_cv_or_404(cv_id, user)
+    _sync_cv_from_mcp_if_newer(cv)
     try:
         data = parse_cv_context_json(cv.context_json)
     except (json.JSONDecodeError, ValueError) as e:
