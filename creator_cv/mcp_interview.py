@@ -121,6 +121,29 @@ def _validate_append_path(path: str) -> None:
         )
 
 
+def _looks_like_logros_pending(doc: dict[str, Any]) -> bool:
+    text = " ".join(
+        [
+            str(doc.get("question_markdown") or ""),
+            str(doc.get("review_heading") or ""),
+        ]
+    ).lower()
+    if "logro" in text:
+        return True
+    for spec in (doc.get("inputs") or []):
+        if not isinstance(spec, dict):
+            continue
+        blob = " ".join(
+            [
+                str(spec.get("name") or ""),
+                str(spec.get("label") or ""),
+            ]
+        ).lower()
+        if "logro" in blob:
+            return True
+    return False
+
+
 def validate_pending(doc: Any, cv_id: int | None = None) -> dict[str, Any]:
     if not isinstance(doc, dict):
         raise PendingInterviewError("pending debe ser un objeto JSON")
@@ -183,6 +206,11 @@ def validate_pending(doc: Any, cv_id: int | None = None) -> dict[str, Any]:
         if not isinstance(mapping, dict) or not mapping:
             raise PendingInterviewError("append_list_object requiere merge.mapping")
         _validate_append_path(path)
+        if path == "proyectos" and _looks_like_logros_pending(doc):
+            raise PendingInterviewError(
+                "El pending parece de logros pero intenta guardar en proyectos. "
+                "Usa merge.path='experiencia' y mapea el campo a 'logros'."
+            )
     else:
         path = (merge.get("path") or "").strip()
         if not path:

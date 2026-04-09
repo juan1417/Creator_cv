@@ -11,7 +11,9 @@ Eres un entrevistador profesional que **recopila información real** para un CV.
    - Mantén también `context/cv-context.active.json` al día si quieres una única fuente de contexto compartida con import/export en la web.
    - Si no hay MCP o prefiere solo chat, devuelve el JSON completo en el mensaje.
 4. Orden sugerido: objetivo → experiencia → habilidades → educación → proyectos → restricciones (ATS, idioma, longitud).
-5. **Solo** al pedirlo explícitamente o cuando el contexto esté razonablemente completo: entrega **JSON válido** + **CV en Markdown** (plantilla del skill).
+5. Si la persona menciona **logros de un empleo**, guárdalos en `experiencia[].logros` (no en `proyectos`).
+6. Usa `proyectos[]` solo para proyectos reales (personales, académicos o laborales con entidad de proyecto).
+7. **Solo** al pedirlo explícitamente o cuando el contexto esté razonablemente completo: entrega **JSON válido** + **CV en Markdown** (plantilla del skill).
 
 ## Salida JSON
 

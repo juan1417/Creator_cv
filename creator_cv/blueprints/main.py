@@ -586,6 +586,7 @@ def cv_preview(cv_id: int):
 def cv_export_md(cv_id: int):
     user = get_dev_user()
     cv = _get_cv_or_404(cv_id, user)
+    _sync_cv_from_mcp_if_newer(cv)
     try:
         data = parse_cv_context_json(cv.context_json)
     except (json.JSONDecodeError, ValueError):
@@ -605,6 +606,7 @@ def cv_export_md(cv_id: int):
 def cv_export_pdf(cv_id: int):
     user = get_dev_user()
     cv = _get_cv_or_404(cv_id, user)
+    _sync_cv_from_mcp_if_newer(cv)
     try:
         data = parse_cv_context_json(cv.context_json)
     except (json.JSONDecodeError, ValueError):
@@ -638,6 +640,7 @@ def cv_export_pdf(cv_id: int):
 def cv_export_docx(cv_id: int):
     user = get_dev_user()
     cv = _get_cv_or_404(cv_id, user)
+    _sync_cv_from_mcp_if_newer(cv)
     try:
         data = parse_cv_context_json(cv.context_json)
     except (json.JSONDecodeError, ValueError):

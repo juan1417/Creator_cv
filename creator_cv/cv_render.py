@@ -145,6 +145,34 @@ def _exp_date_range(item: dict[str, Any]) -> str:
     return " – ".join(parts)
 
 
+def _portfolio_url(meta: dict[str, Any]) -> str:
+    raw = meta.get("contacto")
+    if not isinstance(raw, dict):
+        return ""
+    value = str(raw.get("portafolio") or "").strip()
+    return value
+
+
+def _collect_logros(exp: Any) -> list[str]:
+    out: list[str] = []
+    if not isinstance(exp, list):
+        return out
+    for item in exp:
+        if not isinstance(item, dict):
+            continue
+        raw = item.get("logros")
+        if isinstance(raw, list):
+            for row in raw:
+                s = str(row).strip()
+                if s:
+                    out.append(s)
+        elif raw:
+            s = str(raw).strip()
+            if s:
+                out.append(s)
+    return out
+
+
 def context_to_structured_preview_html(
     data: dict[str, Any],
     *,
@@ -192,6 +220,16 @@ def context_to_structured_preview_html(
     parts.append("</header>")
 
     aside_parts: list[str] = []
+    portfolio = _portfolio_url(meta)
+    if portfolio:
+        aside_parts.append('<section class="cv-ref__section">')
+        aside_parts.append('<h2 class="cv-ref__section-title">Portafolio</h2>')
+        p = _e(portfolio)
+        aside_parts.append(
+            f'<p class="cv-ref__link"><a href="{p}" target="_blank" rel="noopener noreferrer">{p}</a></p>'
+        )
+        aside_parts.append("</section>")
+
     certs = data.get("certificaciones") or []
     if isinstance(certs, list) and certs:
         cert_body: list[str] = []
@@ -289,6 +327,16 @@ def context_to_structured_preview_html(
         parts.append("</section>")
 
     exp = data.get("experiencia") or []
+    logros_globales = _collect_logros(exp)
+    if logros_globales:
+        parts.append('<section class="cv-ref__section">')
+        parts.append('<h2 class="cv-ref__section-title">Logros clave</h2>')
+        parts.append('<ul class="cv-ref__list">')
+        for row in logros_globales:
+            parts.append(f"<li>{_e(row)}</li>")
+        parts.append("</ul>")
+        parts.append("</section>")
+
     if isinstance(exp, list) and exp:
         parts.append('<section class="cv-ref__section">')
         parts.append('<h2 class="cv-ref__section-title">Experiencia</h2>')
@@ -384,7 +432,10 @@ def context_to_structured_preview_html(
     proy = data.get("proyectos") or []
     if isinstance(proy, list) and proy:
         parts.append('<section class="cv-ref__section">')
-        parts.append('<h2 class="cv-ref__section-title">Proyectos</h2>')
+        if portfolio:
+            parts.append('<h2 class="cv-ref__section-title">Proyectos destacados</h2>')
+        else:
+            parts.append('<h2 class="cv-ref__section-title">Proyectos</h2>')
         for item in proy:
             if not isinstance(item, dict):
                 parts.append(f'<p class="cv-ref__para">{_e(item)}</p>')
@@ -392,7 +443,7 @@ def context_to_structured_preview_html(
             name = (item.get("nombre") or "Proyecto").strip()
             parts.append("<div>")
             parts.append(f'<h3 class="cv-ref__proj-name">{_e(name)}</h3>')
-            if item.get("descripcion"):
+            if item.get("descripcion") and not portfolio:
                 parts.append(
                     f'<p class="cv-ref__para">{_e(item["descripcion"])}</p>'
                 )
