@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import timezone
 from typing import Any
 
 from flask import (
@@ -106,25 +105,14 @@ def _get_cv_or_404(cv_id: int, user: User) -> CV:
     return cv
 
 
-def _cv_updated_ts(cv: CV) -> float:
-    updated = cv.updated_at
-    if updated is None:
-        return 0.0
-    if updated.tzinfo is None:
-        updated = updated.replace(tzinfo=timezone.utc)
-    return updated.timestamp()
-
-
 def _sync_cv_from_mcp_if_newer(cv: CV) -> bool:
     """
-    Sincroniza en caliente desde el JSON de MCP si el archivo en disco
-    es más reciente que la última actualización del CV en BD.
+    Sincroniza en caliente desde el JSON de MCP cuando detecta contenido
+    distinto al almacenado en BD.
     """
     path = get_active_context_path(current_app)
     try:
         if not path.is_file():
-            return False
-        if path.stat().st_mtime <= _cv_updated_ts(cv):
             return False
         data = read_context_file(path)
     except (OSError, json.JSONDecodeError, ValueError):
