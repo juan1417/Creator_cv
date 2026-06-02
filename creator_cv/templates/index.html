@@ -1,47 +1,31 @@
 {% extends "base.html" %}
-{% block title %}Inicio · Creator CV{% endblock %}
-{% block body %}
-  <h1>Creator CV</h1>
-  <p class="lede">Edita el contexto estructurado del CV, sincronízalo con el archivo que usa el MCP en Cursor y descárgalo en Markdown, PDF o Word.</p>
-  <p class="callout" role="note">
-    <strong>Compatibilidad con oferta:</strong> abre un CV → botón azul <strong>Compatibilidad con oferta</strong> o enlace <strong>Compat. oferta</strong> en la lista (pega el texto de la vacante; requiere <code>GEMINI_API_KEY</code>).
+{% block title %}{{ app_name }} · Inicio{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Crea tu CV adaptado a una oferta de trabajo</h1>
+  <p>
+    Rellena un solo formulario con tus datos, habilidades y proyectos.
+    Pega la oferta y, si quieres, deja que la IA adapte el CV.
+    Exporta a <strong>PDF estilo Harvard</strong> o <strong>DOCX</strong>.
   </p>
+  <div class="hero-actions">
+    <a class="btn btn-primary" href="{{ url_for('auth.register') }}">Empezar</a>
+    <a class="btn" href="{{ url_for('auth.login') }}">Ya tengo cuenta</a>
+  </div>
+</section>
 
-  <section class="card" aria-labelledby="new-cv-title">
-    <h2 id="new-cv-title">Nuevo CV</h2>
-    <form method="post" action="{{ url_for('main.cv_new') }}" class="form-inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-      <label for="title">Título</label>
-      <input id="title" name="title" type="text" placeholder="Ej. CV 2026 backend" autocomplete="off" />
-      <button type="submit" class="btn btn-primary">Crear</button>
-    </form>
-  </section>
-
-  <section class="card" aria-labelledby="list-title">
-    <h2 id="list-title">Tus CVs</h2>
-    {% if cvs %}
-      <ul class="cv-list">
-        {% for cv in cvs %}
-          <li>
-            <a href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">{{ cv.title or "Sin título" }}</a>
-            <a class="meta-muted" href="{{ url_for('main.cv_chat', cv_id=cv.id) }}">Chat IA</a>
-            <a class="meta-muted" href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}">Compat. oferta</a>
-            <a class="meta-muted" href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">MCP</a>
-            <a class="meta-muted" href="{{ url_for('main.cv_interview', cv_id=cv.id) }}">Asistente</a>
-            <span class="meta-muted">actualizado {{ cv.updated_at.strftime("%Y-%m-%d %H:%M") if cv.updated_at else "" }}</span>
-            <form method="post" action="{{ url_for('main.cv_delete', cv_id=cv.id) }}" class="inline-form cv-delete-form" onsubmit="return confirm('¿Eliminar este CV? Se borrarán el contexto y las secciones asociadas. No se puede deshacer.');">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-              <button type="submit" class="btn btn-danger btn-compact">Eliminar</button>
-            </form>
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="empty-state">Aún no hay CVs. Crea uno con el formulario de arriba.</p>
-    {% endif %}
-  </section>
-
-  <aside class="callout" role="note">
-    <strong>Cursor MCP:</strong> el mismo archivo <code>cv-context.active.json</code> puede editarse desde Cursor (Filesystem MCP) y desde aquí con <em>Importar</em> / <em>Exportar</em>. La última escritura prevalece si usas ambos a la vez.
-  </aside>
+<section class="features">
+  <div class="card">
+    <h3>📝 Un solo formulario</h3>
+    <p>Datos personales, experiencia, habilidades, proyectos y oferta. Todo en una pantalla.</p>
+  </div>
+  <div class="card">
+    <h3>🤖 Adaptación con IA (opcional)</h3>
+    <p>Si configuras <code>GEMINI_API_KEY</code>, la IA reescribe tu CV y propone 3-5 mejoras.</p>
+  </div>
+  <div class="card">
+    <h3>📄 Exporta en PDF o DOCX</h3>
+    <p>PDF limpio estilo Harvard y DOCX editable para Word/LibreOffice.</p>
+  </div>
+</section>
 {% endblock %}

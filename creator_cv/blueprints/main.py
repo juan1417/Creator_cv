@@ -1,660 +1,469 @@
+"""Main blueprint — dashboard, CV CRUD, preview, export, AI adapt."""
+
 from __future__ import annotations
 
-import json
-import os
+import io
+import logging
+from datetime import datetime
 from typing import Any
 
 from flask import (
     Blueprint,
     Response,
     abort,
-    current_app,
     flash,
     jsonify,
-    make_response,
     redirect,
     render_template,
     request,
-    session,
     url_for,
 )
+from flask_login import current_user, login_required
+from pydantic import ValidationError
 from sqlalchemy import select
+from werkzeug.datastructures import MultiDict
 
-from creator_cv.context_sync import (
-    get_active_context_path,
-    parse_cv_context_json,
-    read_context_file,
-    write_context_file,
+from .. import cv_render
+from ..extensions import db
+from ..form_parser import parse_form_to_cv
+from ..match_scorer import score_match
+from ..models import CV
+from ..schemas import empty_cv, validate_cv
+from ..cv_importer import (
+    ALLOWED_EXTENSIONS,
+    allowed_file,
+    import_file_to_cv,
 )
-from creator_cv.mcp_interview import (
-    INTERVIEW_SESSION_SKIP_AUTO_PENDING_KEY,
-    PendingInterviewError,
-    append_to_review,
-    apply_merge,
-    collect_answers,
-    get_pending_interview_path,
-    get_review_markdown_path,
-    interview_pending_parent_dir,
-    pending_template_path,
-    question_html,
-    read_pending_file,
-    remove_pending_file,
-    seed_pending_from_template,
-    validate_pending,
-    write_review_file,
-)
-from creator_cv.cv_patch import apply_cv_context_patch
-from creator_cv.cv_render import (
-    context_to_pdf_bytes_from_preview,
-    context_to_pdf_bytes,
-    context_has_preview_content,
-    context_to_structured_preview_html,
-    json_to_markdown,
-    markdown_to_docx_bytes,
-)
-from creator_cv.extensions import db
-from creator_cv.gemini_chat import run_chat_turn, run_job_fit_analysis
-from creator_cv.interview import (
-    STEP_ORDER,
-    apply_step,
-    build_step_context,
-    next_step_id,
-    normalize_step,
-    prev_step_id,
-    step_index,
-)
-from creator_cv.models import CV, User
-
-DEV_USER_EMAIL = "dev@local"
-
-_MAX_CHAT_TURNS = 80
 
 bp = Blueprint("main", __name__)
+log = logging.getLogger(__name__)
 
 
-def _load_chat_history(cv: CV) -> list[dict[str, Any]]:
-    raw = cv.chat_history_json
-    if not raw or not str(raw).strip():
-        return []
-    try:
-        data = json.loads(raw)
-        return data if isinstance(data, list) else []
-    except json.JSONDecodeError:
-        return []
+# --- helpers ---
 
 
-def _save_chat_history(cv: CV, history: list[dict[str, Any]]) -> None:
-    if len(history) > _MAX_CHAT_TURNS:
-        history = history[-_MAX_CHAT_TURNS:]
-    cv.chat_history_json = json.dumps(history, ensure_ascii=False)
-
-
-def get_dev_user() -> User:
-    user = db.session.scalar(select(User).where(User.email == DEV_USER_EMAIL))
-    if user is None:
-        user = User(email=DEV_USER_EMAIL, password_hash=None)
-        db.session.add(user)
-        db.session.commit()
-    return user
-
-
-def _get_cv_or_404(cv_id: int, user: User) -> CV:
+def _get_owned_cv(cv_id: int) -> CV:
+    """Fetch a CV or 404 — and ensure it belongs to the current user."""
     cv = db.session.get(CV, cv_id)
-    if cv is None or cv.user_id != user.id:
+    if cv is None or cv.user_id != current_user.id:
         abort(404)
     return cv
 
 
-def _sync_cv_from_mcp_if_newer(cv: CV) -> bool:
-    """
-    Sincroniza en caliente desde el JSON de MCP cuando detecta contenido
-    distinto al almacenado en BD.
-    """
-    path = get_active_context_path(current_app)
+def _slug_from_name(name: str | None) -> str:
+    if not name:
+        return "cv"
+    s = "".join(c.lower() if c.isalnum() else "-" for c in name).strip("-")
+    return s or "cv"
+
+
+def _recompute_match(cv: CV) -> None:
+    """Recompute the match score and persist it on ``cv`` (if there's an offer)."""
+    import json as _json
+    from datetime import datetime as _dt
+
+    if not cv.job_offer or not cv.job_offer.strip():
+        cv.match_score = None
+        cv.match_summary = None
+        cv.match_json = None
+        cv.match_at = None
+        return
     try:
-        if not path.is_file():
-            return False
-        data = read_context_file(path)
-    except (OSError, json.JSONDecodeError, ValueError):
-        current_app.logger.exception("sync_from_mcp_if_newer_failed")
-        return False
-
-    new_context = json.dumps(data, ensure_ascii=False, indent=2)
-    if (cv.context_json or "").strip() == new_context.strip():
-        return False
-
-    cv.context_json = new_context
-    db.session.commit()
-    return True
+        result = score_match(cv.context_dict(), cv.job_offer)
+    except Exception:
+        log.exception("score_match failed")
+        return
+    cv.match_score = int(result.get("total") or 0)
+    cv.match_summary = result.get("summary") or ""
+    cv.match_json = _json.dumps(result, ensure_ascii=False)
+    cv.match_at = _dt.utcnow()
 
 
-@bp.app_context_processor
-def inject_mcp_path():
-    app = current_app
-    return {
-        "mcp_context_path": str(get_active_context_path(app)),
-        "mcp_interview_pending_dir": str(interview_pending_parent_dir(app)),
-    }
+# --- Public landing ---
 
 
 @bp.route("/")
 def index():
-    user = get_dev_user()
-    cvs = db.session.scalars(
-        select(CV).where(CV.user_id == user.id).order_by(CV.updated_at.desc())
-    ).all()
-    return render_template("index.html", cvs=cvs)
+    if current_user.is_authenticated:
+        return redirect(url_for("main.dashboard"))
+    return render_template("index.html")
 
 
-@bp.route("/cvs/new", methods=["POST"])
+# --- Dashboard ---
+
+
+@bp.route("/dashboard")
+@login_required
+def dashboard():
+    cvs = list(
+        db.session.scalars(
+            select(CV).where(CV.user_id == current_user.id).order_by(CV.updated_at.desc())
+        )
+    )
+    return render_template("dashboard.html", cvs=cvs)
+
+
+# --- New CV ---
+
+
+@bp.route("/cv/new", methods=("GET", "POST"))
+@login_required
 def cv_new():
-    user = get_dev_user()
-    title = (request.form.get("title") or "").strip() or "Sin título"
-    cv = CV(user_id=user.id, title=title)
-    db.session.add(cv)
-    db.session.commit()
-    flash("CV creado.", "success")
-    return redirect(url_for("main.cv_edit", cv_id=cv.id))
+    if request.method == "POST":
+        form_data = request.form.to_dict(flat=False)
+        flat = _flatten(form_data)
+        try:
+            cv_data = validate_cv(parse_form_to_cv(flat))
+        except ValidationError as e:
+            flash(f"Datos inválidos: {e.errors()[0]['msg']}", "error")
+            return render_template("cv_form.html", cv=empty_cv(), job_offer="", cv_id=None)
+
+        cv = CV(
+            user_id=current_user.id,
+            title=_derive_title(cv_data),
+            job_offer=(request.form.get("job_offer") or "").strip() or None,
+        )
+        cv.set_context(cv_data)
+        _recompute_match(cv)
+        db.session.add(cv)
+        db.session.commit()
+        flash("CV creado.", "success")
+        return redirect(url_for("main.cv_edit", cv_id=cv.id))
+    return render_template("cv_form.html", cv=empty_cv(), job_offer="", cv_id=None)
 
 
-@bp.route("/cvs/<int:cv_id>/delete", methods=["POST"])
-def cv_delete(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    title = cv.title or "Sin título"
-    sk = INTERVIEW_SESSION_SKIP_AUTO_PENDING_KEY
-    if session.get(sk) == cv.id:
-        session.pop(sk, None)
-    remove_pending_file(get_pending_interview_path(current_app, cv_id))
-    db.session.delete(cv)
-    db.session.commit()
-    flash(f"CV eliminado: «{title}».", "success")
-    return redirect(url_for("main.index"))
+# --- Improve CV (no job offer, generic upgrade) ---
 
 
-@bp.route("/cvs/<int:cv_id>/interview/mcp", methods=["GET", "POST"])
-def cv_interview_mcp(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    pending_path = get_pending_interview_path(current_app, cv.id)
-    review_path = get_review_markdown_path(current_app, cv.id)
+@bp.route("/cv/<int:cv_id>/improve", methods=("POST",))
+@login_required
+def cv_improve(cv_id: int):
+    """Reformulate the CV to be stronger in general (resumen, bullets, achievements, skills).
+
+    Returns the new CV, the before/after match score (if there's a job offer
+    attached), and a delta so the UI can show "+15 puntos".
+    """
+    from ..gemini_adapter import improve_cv, is_configured
+
+    cv = _get_owned_cv(cv_id)
+    if not is_configured():
+        return _bad_request("La integración con IA no está configurada (GEMINI_API_KEY).")
+
+    # Use current form data if present, otherwise the stored CV.
+    flat = _flatten(request.form.to_dict(flat=False))
+    base_cv = (
+        parse_form_to_cv(flat)
+        if any(k.startswith(("meta.", "experiencia")) for k in flat)
+        else cv.context_dict()
+    )
+
+    # Score BEFORE the improvement (only if there's a job offer to score against).
+    from ..match_scorer import score_match
+
+    before_score: int | None = None
+    before_meta: dict | None = None
+    if cv.job_offer and cv.job_offer.strip():
+        before_result = score_match(base_cv, cv.job_offer)
+        before_score = int(before_result["total"])
+        before_meta = {
+            "tecnicas": before_result["dimensions"]["tecnicas"]["matched"],
+            "idiomas": before_result["dimensions"]["idiomas"]["matched"],
+        }
 
     try:
-        data = parse_cv_context_json(cv.context_json)
-    except (json.JSONDecodeError, ValueError) as e:
-        flash(str(e), "error")
-        return redirect(url_for("main.cv_edit", cv_id=cv.id))
+        improved_cv = improve_cv(base_cv)
+    except RuntimeError as e:
+        log.exception("Improve failed")
+        return _bad_request(str(e))
+
+    # Score AFTER (only if a job offer exists).
+    after_score: int | None = None
+    after_meta: dict | None = None
+    if cv.job_offer and cv.job_offer.strip():
+        after_result = score_match(improved_cv, cv.job_offer)
+        after_score = int(after_result["total"])
+        after_meta = {
+            "tecnicas": after_result["dimensions"]["tecnicas"]["matched"],
+            "idiomas": after_result["dimensions"]["idiomas"]["matched"],
+        }
+
+    delta: int | None = None
+    if before_score is not None and after_score is not None:
+        delta = after_score - before_score
+
+    # Persist.
+    cv.set_context(improved_cv)
+    _recompute_match(cv)
+    db.session.commit()
+
+    return jsonify(
+        {
+            "ok": True,
+            "cv": improved_cv,
+            "before_score": before_score,
+            "after_score": after_score,
+            "delta": delta,
+            "before_meta": before_meta,
+            "after_meta": after_meta,
+        }
+    )
+
+
+# --- Import CV from file (PDF / DOCX) ---
+
+
+@bp.route("/cv/import", methods=("GET", "POST"))
+@login_required
+def cv_import():
+    from ..gemini_adapter import is_configured
 
     if request.method == "POST":
-        raw = read_pending_file(pending_path)
-        if raw is None:
-            flash("No hay pregunta pendiente. Genera una en Cursor (archivo pending).", "error")
-            return redirect(url_for("main.cv_interview_mcp", cv_id=cv.id))
-        try:
-            pending = validate_pending(raw, cv_id=cv.id)
-            answers = collect_answers(pending, request.form)
-            new_data = apply_merge(data, pending, answers)
-            cv.context_json = json.dumps(new_data, ensure_ascii=False, indent=2)
-            cv.review_markdown = append_to_review(cv.review_markdown, pending, answers)
-            db.session.commit()
-            write_review_file(review_path, cv.review_markdown or "")
-            remove_pending_file(pending_path)
-            session[INTERVIEW_SESSION_SKIP_AUTO_PENDING_KEY] = cv.id
+        upload = request.files.get("cv_file")
+        if upload is None or not upload.filename:
+            flash("Selecciona un archivo PDF o DOCX.", "warning")
+            return redirect(url_for("main.cv_import"))
+        if not allowed_file(upload.filename):
             flash(
-                "Respuesta guardada. Contexto y revisión actualizados. "
-                "La IA en Cursor puede leer el contexto y escribir la siguiente pregunta.",
-                "success",
+                f"Tipo de archivo no soportado. Extensiones permitidas: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+                "error",
             )
-        except PendingInterviewError as e:
-            flash(str(e), "error")
-        return redirect(url_for("main.cv_interview_mcp", cv_id=cv.id))
+            return redirect(url_for("main.cv_import"))
+        if not is_configured():
+            flash(
+                "Para importar un CV se necesita GEMINI_API_KEY configurada.",
+                "error",
+            )
+            return redirect(url_for("main.cv_import"))
 
-    if current_app.config.get("CREATOR_CV_INTERVIEW_AUTO_FIRST_PENDING", True):
-        sk = INTERVIEW_SESSION_SKIP_AUTO_PENDING_KEY
-        if session.get(sk) == cv.id:
-            session.pop(sk, None)
-        elif not pending_path.is_file():
-            try:
-                seed_pending_from_template(pending_path, cv_id=cv.id)
-                flash(
-                    "Primera ronda generada desde la plantilla del repo (perfil completo en un paso). "
-                    "Para las siguientes rondas, pide en Cursor un pending que recoja experiencia, educación "
-                    "o habilidades en bloque para acabar antes. Desactiva la auto-primera-ronda con "
-                    "CREATOR_CV_INTERVIEW_AUTO_FIRST_PENDING=0 si prefieres solo MCP.",
-                    "info",
-                )
-                return redirect(url_for("main.cv_interview_mcp", cv_id=cv.id))
-            except PendingInterviewError as e:
-                flash(str(e), "error")
-
-    raw: dict[str, Any] | None = None
-    read_err: str | None = None
-    try:
-        raw = read_pending_file(pending_path)
-    except PendingInterviewError as e:
-        read_err = str(e)
-    idle = raw is None and read_err is None
-    pending_valid: dict[str, Any] | None = None
-    err: str | None = read_err
-    if raw is not None:
         try:
-            pending_valid = validate_pending(raw, cv_id=cv.id)
-            err = None
-        except PendingInterviewError as e:
-            err = str(e)
-            pending_valid = None
-
-    q_html = ""
-    if pending_valid:
-        q_html = question_html(pending_valid["question_markdown"])
-
-    pending_abs = pending_path.resolve()
-    resp = make_response(
-        render_template(
-            "cv_interview_mcp.html",
-            cv=cv,
-            idle=idle,
-            pending_error=err,
-            pending=pending_valid,
-            question_html_safe=q_html,
-            template_path=str(pending_template_path()),
-            review_path=str(review_path),
-            pending_path_resolved=str(pending_abs),
-            pending_file_exists=pending_path.is_file(),
-            pending_basename=pending_path.name,
-        )
-    )
-    resp.headers["Cache-Control"] = "no-store, max-age=0"
-    return resp
-
-
-@bp.route("/cvs/<int:cv_id>/interview/mcp/seed-template", methods=["POST"])
-def cv_interview_mcp_seed_template(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    pending_path = get_pending_interview_path(current_app, cv.id)
-    try:
-        existing = read_pending_file(pending_path)
-    except PendingInterviewError as e:
-        flash(
-            f"No se puede crear un pending nuevo hasta corregir el archivo actual: {e}. "
-            f"Ruta: {pending_path}",
-            "error",
-        )
-        return redirect(url_for("main.cv_interview_mcp", cv_id=cv.id))
-    if existing is not None:
-        flash(
-            "Ya existe un archivo pending con JSON válido. Respóndelo o bórralo antes "
-            "de generar uno desde la plantilla.",
-            "error",
-        )
-        return redirect(url_for("main.cv_interview_mcp", cv_id=cv.id))
-    try:
-        seed_pending_from_template(pending_path, cv_id=cv.id)
-        flash(
-            f"Archivo listo: {pending_path.name} (plantilla). "
-            "Esto no arranca MCP en servidor: MCP solo corre en Cursor cuando chateas. "
-            "Recarga y responde; la siguiente ronda va en un nuevo archivo para este mismo CV.",
-            "success",
-        )
-    except PendingInterviewError as e:
-        flash(str(e), "error")
-    except OSError as e:
-        flash(str(e), "error")
-    return redirect(url_for("main.cv_interview_mcp", cv_id=cv.id))
-
-
-@bp.route("/cvs/<int:cv_id>/chat", methods=["GET"])
-def cv_chat(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    messages = _load_chat_history(cv)
-    gemini_ok = bool(os.environ.get("GEMINI_API_KEY", "").strip())
-    return render_template(
-        "cv_chat.html",
-        cv=cv,
-        messages=messages,
-        gemini_configured=gemini_ok,
-    )
-
-
-@bp.route("/cvs/<int:cv_id>/chat/send", methods=["POST"])
-def cv_chat_send(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    message = (request.form.get("message") or "").strip()
-    capacity = (request.form.get("user_capacity") or "intermedio").strip()
-    if capacity not in ("principiante", "intermedio", "avanzado"):
-        capacity = "intermedio"
-    if not message:
-        return jsonify({"ok": False, "error": "Mensaje vacío."}), 400
-    try:
-        data = parse_cv_context_json(cv.context_json)
-    except (json.JSONDecodeError, ValueError) as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
-
-    history = _load_chat_history(cv)
-    history_out: list[dict[str, str]] = []
-    for t in history:
-        if t.get("role") not in ("user", "assistant"):
-            continue
-        c = t.get("content")
-        if c is None:
-            continue
-        history_out.append({"role": str(t["role"]), "content": str(c)})
-
-    try:
-        visible, patch = run_chat_turn(
-            history=history_out,
-            user_message=message,
-            capacity_key=capacity,
-            cv_data=data,
-        )
-    except RuntimeError as e:
-        return jsonify({"ok": False, "error": str(e)}), 503
-    except Exception as e:
-        current_app.logger.exception("chat_gemini")
-        return jsonify({"ok": False, "error": f"Error del modelo: {e}"}), 500
-
-    history.append({"role": "user", "content": message})
-    assistant_turn: dict[str, Any] = {"role": "assistant", "content": visible}
-    if patch:
-        assistant_turn["patch"] = patch
-    history.append(assistant_turn)
-    _save_chat_history(cv, history)
-    db.session.commit()
-    return jsonify({"ok": True, "assistant": visible, "patch": patch})
-
-
-@bp.route("/cvs/<int:cv_id>/chat/apply", methods=["POST"])
-def cv_chat_apply(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    mode = (request.form.get("apply_mode") or "").strip()
-    patch: dict[str, Any] | None = None
-    if mode == "last":
-        for turn in reversed(_load_chat_history(cv)):
-            if turn.get("role") == "assistant" and isinstance(turn.get("patch"), dict):
-                patch = turn["patch"]
-                break
-    else:
-        raw = request.form.get("patch_json") or ""
-        if raw.strip():
-            try:
-                p = json.loads(raw)
-                patch = p if isinstance(p, dict) else None
-            except json.JSONDecodeError:
-                flash("JSON del parche inválido.", "error")
-                return redirect(url_for("main.cv_chat", cv_id=cv.id))
-    if not patch:
-        flash("No hay parche para aplicar.", "error")
-        return redirect(url_for("main.cv_chat", cv_id=cv.id))
-    try:
-        base = parse_cv_context_json(cv.context_json)
-        merged = apply_cv_context_patch(base, patch)
-        cv.context_json = json.dumps(merged, ensure_ascii=False, indent=2)
-        db.session.commit()
-        flash("Contexto del CV actualizado desde el chat.", "success")
-    except (ValueError, TypeError) as e:
-        flash(str(e), "error")
-    return redirect(url_for("main.cv_chat", cv_id=cv.id))
-
-
-@bp.route("/cvs/<int:cv_id>/chat/clear", methods=["POST"])
-def cv_chat_clear(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    cv.chat_history_json = None
-    db.session.commit()
-    flash("Historial del chat borrado.", "info")
-    return redirect(url_for("main.cv_chat", cv_id=cv.id))
-
-
-@bp.route("/cvs/<int:cv_id>/job-fit", methods=["GET"])
-def cv_job_fit(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    gemini_ok = bool(os.environ.get("GEMINI_API_KEY", "").strip())
-    return render_template(
-        "cv_job_fit.html",
-        cv=cv,
-        gemini_configured=gemini_ok,
-    )
-
-
-@bp.route("/cvs/<int:cv_id>/job-fit/analyze", methods=["POST"])
-def cv_job_fit_analyze(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    job_text = (request.form.get("job_text") or "").strip()
-    try:
-        data = parse_cv_context_json(cv.context_json)
-    except (json.JSONDecodeError, ValueError) as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
-    try:
-        md = run_job_fit_analysis(cv_data=data, job_text=job_text)
-    except ValueError as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
-    except RuntimeError as e:
-        return jsonify({"ok": False, "error": str(e)}), 503
-    except Exception as e:
-        current_app.logger.exception("job_fit_analyze")
-        return jsonify({"ok": False, "error": f"Error del modelo: {e}"}), 500
-    html = question_html(md)
-    return jsonify({"ok": True, "markdown": md, "html": html})
-
-
-@bp.route("/cvs/<int:cv_id>/review")
-def cv_review(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    md = (cv.review_markdown or "").strip()
-    if not md:
-        return render_template(
-            "cv_review.html",
-            cv=cv,
-            review_html="",
-            review_markdown="",
-            review_empty=True,
-        )
-    html = question_html(md)
-    return render_template(
-        "cv_review.html",
-        cv=cv,
-        review_html=html,
-        review_markdown=md,
-        review_empty=False,
-    )
-
-
-@bp.route("/cvs/<int:cv_id>/interview", methods=["GET", "POST"])
-def cv_interview(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    try:
-        data = parse_cv_context_json(cv.context_json)
-    except (json.JSONDecodeError, ValueError) as e:
-        flash(str(e), "error")
-        return redirect(url_for("main.cv_edit", cv_id=cv.id))
-
-    if request.method == "POST":
-        step = normalize_step(request.form.get("step"))
-        data = apply_step(step, request.form, data)
-        cv.context_json = json.dumps(data, ensure_ascii=False, indent=2)
-        db.session.commit()
-        nxt = next_step_id(step)
-        if nxt is None:
-            flash("Entrevista completada. Puedes seguir editando el JSON a mano.", "success")
-            return redirect(url_for("main.cv_edit", cv_id=cv.id))
-        return redirect(url_for("main.cv_interview", cv_id=cv.id, step=nxt))
-
-    step = normalize_step(request.args.get("step"))
-    ctx = build_step_context(step, data)
-    ctx["cv"] = cv
-    ctx["step_num"] = step_index(step) + 1
-    ctx["step_total"] = len(STEP_ORDER)
-    ctx["prev_step"] = prev_step_id(step)
-    return render_template("cv_interview.html", **ctx)
-
-
-@bp.route("/cvs/<int:cv_id>/edit", methods=["GET", "POST"])
-def cv_edit(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    if request.method == "POST":
-        raw = request.form.get("context_json") or ""
-        try:
-            merged = parse_cv_context_json(raw)
+            cv_data = import_file_to_cv(upload)
         except ValueError as e:
             flash(str(e), "error")
-            return render_template(
-                "cv_edit.html",
-                cv=cv,
-                context_text=raw,
-            ), 400
-        cv.context_json = json.dumps(merged, ensure_ascii=False, indent=2)
-        db.session.commit()
-        flash("Contexto guardado en la base de datos.", "success")
-        return redirect(url_for("main.cv_edit", cv_id=cv.id))
+            return redirect(url_for("main.cv_import"))
+        except RuntimeError as e:
+            log.exception("Import failed")
+            flash(str(e), "error")
+            return redirect(url_for("main.cv_import"))
 
-    _sync_cv_from_mcp_if_newer(cv)
-    text = cv.context_json or ""
-    if not text.strip():
-        text = json.dumps(
-            read_context_file(get_active_context_path(current_app)),
-            ensure_ascii=False,
-            indent=2,
+        cv = CV(
+            user_id=current_user.id,
+            title=_derive_title(cv_data),
+            job_offer=None,
         )
-    return render_template("cv_edit.html", cv=cv, context_text=text)
-
-
-@bp.route("/cvs/<int:cv_id>/sync/from-mcp", methods=["POST"])
-def cv_sync_from_mcp(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    path = get_active_context_path(current_app)
-    try:
-        data = read_context_file(path)
-        cv.context_json = json.dumps(data, ensure_ascii=False, indent=2)
+        cv.set_context(cv_data)
+        _recompute_match(cv)
+        db.session.add(cv)
         db.session.commit()
-        flash(f"Importado desde {path}", "success")
-    except (OSError, json.JSONDecodeError, ValueError) as e:
-        flash(str(e), "error")
-    return redirect(url_for("main.cv_edit", cv_id=cv.id))
-
-
-@bp.route("/cvs/<int:cv_id>/sync/to-mcp", methods=["POST"])
-def cv_sync_to_mcp(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    path = get_active_context_path(current_app)
-    try:
-        if not cv.context_json or not cv.context_json.strip():
-            flash("No hay contexto en BD para exportar. Guarda o importa primero.", "error")
-            return redirect(url_for("main.cv_edit", cv_id=cv.id))
-        data = parse_cv_context_json(cv.context_json)
-        write_context_file(path, data)
-        flash(f"Exportado a {path}", "success")
-    except (OSError, ValueError) as e:
-        flash(str(e), "error")
-    return redirect(url_for("main.cv_edit", cv_id=cv.id))
-
-
-@bp.route("/cvs/<int:cv_id>/preview")
-def cv_preview(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    _sync_cv_from_mcp_if_newer(cv)
-    try:
-        data = parse_cv_context_json(cv.context_json)
-    except (json.JSONDecodeError, ValueError) as e:
-        flash(str(e), "error")
+        flash(
+            "CV importado. Revisa los datos y ajústalo antes de adaptarlo a una oferta.",
+            "success",
+        )
         return redirect(url_for("main.cv_edit", cv_id=cv.id))
-    md = json_to_markdown(data)
-    preview_html = context_to_structured_preview_html(data, fallback_title=cv.title)
-    preview_empty = not context_has_preview_content(data)
+
     return render_template(
-        "cv_preview.html",
-        cv=cv,
-        markdown=md,
-        preview_html=preview_html,
-        preview_empty=preview_empty,
+        "cv_import.html",
+        allowed_extensions=sorted(ALLOWED_EXTENSIONS),
+        gemini_enabled=is_configured(),
     )
 
 
-@bp.route("/cvs/<int:cv_id>/export.md")
-def cv_export_md(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    _sync_cv_from_mcp_if_newer(cv)
+# --- Edit CV ---
+
+
+@bp.route("/cv/<int:cv_id>")
+@login_required
+def cv_edit(cv_id: int):
+    cv = _get_owned_cv(cv_id)
+    return render_template(
+        "cv_form.html",
+        cv=cv.context_dict(),
+        job_offer=cv.job_offer or "",
+        review_md=cv.review_md or "",
+        cv_id=cv.id,
+    )
+
+
+# --- Save CV (no AI) ---
+
+
+@bp.route("/cv/<int:cv_id>/save", methods=("POST",))
+@login_required
+def cv_save(cv_id: int):
+    cv = _get_owned_cv(cv_id)
+    flat = _flatten(request.form.to_dict(flat=False))
     try:
-        data = parse_cv_context_json(cv.context_json)
-    except (json.JSONDecodeError, ValueError):
-        abort(400)
-    md = json_to_markdown(data)
-    name = "".join(c if c.isalnum() or c in " -_" else "_" for c in cv.title) or "cv"
-    return Response(
-        md,
-        mimetype="text/markdown; charset=utf-8",
-        headers={
-            "Content-Disposition": f'attachment; filename="{name.strip()[:80]}.md"'
-        },
+        cv_data = validate_cv(parse_form_to_cv(flat))
+    except ValidationError as e:
+        return _bad_request(f"Datos inválidos: {e.errors()[0]['msg']}")
+
+    cv.set_context(cv_data)
+    cv.title = _derive_title(cv_data)
+    cv.job_offer = (request.form.get("job_offer") or "").strip() or None
+    _recompute_match(cv)
+    db.session.commit()
+    return jsonify(
+        {
+            "ok": True,
+            "cv_id": cv.id,
+            "title": cv.title,
+            "match_score": cv.match_score,
+            "match_summary": cv.match_summary,
+        }
     )
 
 
-@bp.route("/cvs/<int:cv_id>/export.pdf")
+# --- Adapt with Gemini (iterative, target score 70/100) ---
+
+
+@bp.route("/cv/<int:cv_id>/adapt", methods=("POST",))
+@login_required
+def cv_adapt(cv_id: int):
+    cv = _get_owned_cv(cv_id)
+    job_offer = (request.form.get("job_offer") or "").strip()
+    if not job_offer:
+        return _bad_request("Pega una oferta de trabajo antes de adaptar con IA.")
+    if len(job_offer) < 30:
+        return _bad_request("La oferta es demasiado corta (mínimo 30 caracteres).")
+
+    from ..gemini_adapter import adapt_until_score, is_configured
+
+    if not is_configured():
+        return _bad_request("La integración con IA no está configurada (GEMINI_API_KEY).")
+
+    # Use the current form data if provided, otherwise the stored CV.
+    flat = _flatten(request.form.to_dict(flat=False))
+    base_cv = (
+        parse_form_to_cv(flat)
+        if any(k.startswith(("meta.", "experiencia")) for k in flat)
+        else cv.context_dict()
+    )
+
+    # Configurable target / max iterations. Could be exposed in the UI later.
+    target_score = 70
+    max_iterations = 5
+
+    try:
+        adapted_cv, review_md, loop_meta = adapt_until_score(
+            base_cv,
+            job_offer,
+            target_score=target_score,
+            max_iterations=max_iterations,
+        )
+    except RuntimeError as e:
+        log.exception("Gemini adapt failed")
+        return _bad_request(str(e))
+
+    cv.set_context(adapted_cv)
+    cv.job_offer = job_offer
+    cv.review_md = review_md
+    _recompute_match(cv)
+    db.session.commit()
+
+    return jsonify(
+        {
+            "ok": True,
+            "cv": adapted_cv,
+            "review_md": review_md,
+            "match_score": cv.match_score,
+            "match_summary": cv.match_summary,
+            "loop": loop_meta,
+        }
+    )
+
+
+# --- Preview ---
+
+
+@bp.route("/cv/<int:cv_id>/preview")
+@login_required
+def cv_preview(cv_id: int):
+    cv = _get_owned_cv(cv_id)
+    return render_template("cv_preview.html", cv=cv.context_dict())
+
+
+# --- Export PDF ---
+
+
+@bp.route("/cv/<int:cv_id>/export.pdf")
+@login_required
 def cv_export_pdf(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    _sync_cv_from_mcp_if_newer(cv)
+    cv = _get_owned_cv(cv_id)
     try:
-        data = parse_cv_context_json(cv.context_json)
-    except (json.JSONDecodeError, ValueError):
-        abort(400)
-    try:
-        try:
-            pdf_bytes = context_to_pdf_bytes_from_preview(
-                data,
-                root_path=current_app.root_path,
-                fallback_title=cv.title,
-            )
-        except RuntimeError:
-            current_app.logger.warning(
-                "export_pdf_preview_renderer_unavailable_fallback_to_fpdf"
-            )
-            pdf_bytes = context_to_pdf_bytes(data, fallback_title=cv.title)
+        pdf_bytes = cv_render.render_pdf(cv.context_dict())
     except Exception:
-        current_app.logger.exception("export_pdf")
+        log.exception("PDF render failed")
         abort(500)
-    name = "".join(c if c.isalnum() or c in " -_" else "_" for c in cv.title) or "cv"
+    filename = f"{_slug_from_name(cv.title)}-{cv.id}.pdf"
     return Response(
         pdf_bytes,
         mimetype="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="{name.strip()[:80]}.pdf"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
-@bp.route("/cvs/<int:cv_id>/export.docx")
+# --- Export DOCX ---
+
+
+@bp.route("/cv/<int:cv_id>/export.docx")
+@login_required
 def cv_export_docx(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    _sync_cv_from_mcp_if_newer(cv)
+    cv = _get_owned_cv(cv_id)
     try:
-        data = parse_cv_context_json(cv.context_json)
-    except (json.JSONDecodeError, ValueError):
-        abort(400)
-    md = json_to_markdown(data)
-    docx_bytes = markdown_to_docx_bytes(md)
-    name = "".join(c if c.isalnum() or c in " -_" else "_" for c in cv.title) or "cv"
+        docx_bytes = cv_render.render_docx(cv.context_dict())
+    except Exception:
+        log.exception("DOCX render failed")
+        abort(500)
+    filename = f"{_slug_from_name(cv.title)}-{cv.id}.docx"
     return Response(
         docx_bytes,
         mimetype=(
-            "application/vnd.openxmlformats-officedocument."
-            "wordprocessingml.document"
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         ),
-        headers={
-            "Content-Disposition": f'attachment; filename="{name.strip()[:80]}.docx"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# --- Delete ---
+
+
+@bp.route("/cv/<int:cv_id>/delete", methods=("POST",))
+@login_required
+def cv_delete(cv_id: int):
+    cv = _get_owned_cv(cv_id)
+    db.session.delete(cv)
+    db.session.commit()
+    flash("CV eliminado.", "info")
+    return redirect(url_for("main.dashboard"))
+
+
+# --- internals ---
+
+
+def _flatten(md: MultiDict) -> dict[str, Any]:
+    """Flask's ``request.form.to_dict(flat=False)`` returns lists for
+    repeated keys. We collapse to single values (the form sends one
+    per chip slot, but our regex parser walks them anyway)."""
+    out: dict[str, Any] = {}
+    for k, v in md.items():
+        if isinstance(v, list):
+            out[k] = v[0] if len(v) == 1 else v
+        else:
+            out[k] = v
+    return out
+
+
+def _derive_title(cv_data: dict) -> str:
+    name = (cv_data.get("meta") or {}).get("nombre_completo") or ""
+    title = (cv_data.get("meta") or {}).get("titulo_profesional") or ""
+    base = name.strip() or title.strip()
+    return f"CV de {base}" if base else "Mi CV"
+
+
+def _bad_request(msg: str) -> Response:
+    resp = jsonify({"ok": False, "error": msg})
+    resp.status_code = 400
+    return resp
+
+
+# silence unused-import warnings
+_ = (io, datetime)

@@ -1,74 +1,75 @@
-import os
+"""Creator CV — Flask application factory.
 
-from dotenv import load_dotenv
+Use ``flask --app app:create_app run`` to start the dev server.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
 from flask import Flask
 
-from creator_cv.extensions import csrf, db, migrate
-
-load_dotenv()
-
-
-def _env_truthy(name: str, default: bool = True) -> bool:
-    raw = os.environ.get(name, "")
-    if raw.strip() == "":
-        return default
-    return raw.strip().lower() not in ("0", "false", "no", "off")
+from .config import get_config
+from .extensions import csrf, db, login_manager, migrate
 
 
-def create_app(test_config: dict | None = None) -> Flask:
-    app = Flask(__name__)
-
-    default_db = (
-        os.environ.get("DATABASE_URL")
-        or "sqlite:///creator_cv.sqlite3"
+def create_app() -> Flask:
+    """Build and configure the Flask app."""
+    app = Flask(
+        __name__,
+        instance_path=str(Path(__file__).resolve().parent.parent / "instance"),
+        instance_relative_config=False,
     )
+    app.config.from_object(get_config())
 
-    app.config.from_mapping(
-        SECRET_KEY=os.environ.get("SECRET_KEY", "dev-change-in-production"),
-        SQLALCHEMY_DATABASE_URI=default_db,
-        SQLALCHEMY_TRACK_MODIFICATIONS=False,
-        CREATOR_CV_CONTEXT_PATH=os.environ.get("CREATOR_CV_CONTEXT_PATH", ""),
-        CREATOR_CV_INTERVIEW_PENDING_PATH=os.environ.get(
-            "CREATOR_CV_INTERVIEW_PENDING_PATH", ""
-        ),
-        CREATOR_CV_REVIEW_PATH=os.environ.get("CREATOR_CV_REVIEW_PATH", ""),
-        CREATOR_CV_INTERVIEW_AUTO_FIRST_PENDING=_env_truthy(
-            "CREATOR_CV_INTERVIEW_AUTO_FIRST_PENDING", True
-        ),
-    )
+    # Ensure the instance directory exists (SQLite target).
+    Path(app.instance_path).mkdir(parents=True, exist_ok=True)
 
-    if test_config is not None:
-        app.config.update(test_config)
+    _register_extensions(app)
+    _register_blueprints(app)
+    _register_user_loader()
+    _register_context(app)
 
-    if not app.config.get("CREATOR_CV_CONTEXT_PATH"):
-        app.config["CREATOR_CV_CONTEXT_PATH"] = None
-    if not app.config.get("CREATOR_CV_INTERVIEW_PENDING_PATH"):
-        app.config["CREATOR_CV_INTERVIEW_PENDING_PATH"] = None
-    if not app.config.get("CREATOR_CV_REVIEW_PATH"):
-        app.config["CREATOR_CV_REVIEW_PATH"] = None
+    return app
 
+
+def _register_extensions(app: Flask) -> None:
     db.init_app(app)
     migrate.init_app(app, db)
     csrf.init_app(app)
+    login_manager.init_app(app)
 
-    from creator_cv import models  # noqa: F401
 
-    from creator_cv.blueprints.main import bp as main_bp
+def _register_blueprints(app: Flask) -> None:
+    from .blueprints.auth import bp as auth_bp
+    from .blueprints.main import bp as main_bp
 
+    app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
 
-    @app.after_request
-    def _disable_cache_for_dynamic_pages(response):
-        # Evita formularios/tokens viejos cuando hay varias recargas en dev.
-        if not (response.cache_control and response.cache_control.public):
-            if not str(response.mimetype or "").startswith(
-                ("text/css", "application/javascript", "image/")
-            ):
-                response.headers["Cache-Control"] = (
-                    "no-store, no-cache, must-revalidate, max-age=0"
-                )
-                response.headers["Pragma"] = "no-cache"
-                response.headers["Expires"] = "0"
-        return response
 
-    return app
+def _register_user_loader() -> None:
+    # Import inside the function to avoid circular imports at module load.
+    from .models import User
+
+    @login_manager.user_loader
+    def load_user(user_id: str) -> User | None:
+        return db.session.get(User, int(user_id))
+
+
+def _register_context(app: Flask) -> None:
+    from .gemini_adapter import is_configured as gemini_is_configured
+    from .match_scorer import badge_color
+
+    @app.context_processor
+    def inject_globals() -> dict:
+        return {
+            "app_name": app.config["APP_NAME"],
+            "gemini_enabled": gemini_is_configured(),
+        }
+
+    @app.template_filter("match_badge_class")
+    def _match_badge_class_filter(score):
+        if score is None:
+            return "badge-gray"
+        return badge_color(int(score))

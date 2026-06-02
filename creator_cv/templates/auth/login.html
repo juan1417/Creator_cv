@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Entrar · {{ app_name }}{% endblock %}
+{% block content %}
+<section class="auth-card">
+  <h1>Entrar</h1>
+  <form method="post" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>
+      Email
+      <input type="email" name="email" required value="{{ form.email }}">
+      {% if form.errors.email %}<small class="error">{{ form.errors.email }}</small>{% endif %}
+    </label>
+    <label>
+      Contraseña
+      <input type="password" name="password" required>
+      {% if form.errors.password %}<small class="error">{{ form.errors.password }}</small>{% endif %}
+    </label>
+    <button type="submit" class="btn btn-primary">Entrar</button>
+  </form>
+  <p class="muted">¿No tienes cuenta? <a href="{{ url_for('auth.register') }}">Regístrate</a></p>
+</section>
+{% endblock %}

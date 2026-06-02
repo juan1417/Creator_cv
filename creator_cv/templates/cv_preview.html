@@ -1,30 +1,125 @@
 {% extends "base.html" %}
-{% block main_classes %}main-content main-content--doc-preview{% endblock %}
-{% block title %}Vista previa · {{ cv.title }}{% endblock %}
-{% block body %}
-  <p class="breadcrumb preview-doc-breadcrumb">
-    <a href="{{ url_for('main.index') }}">Inicio</a> /
-    <a href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">Editor</a> /
-    Vista previa
-  </p>
-  <h1 class="preview-doc-title">Vista previa</h1>
-  <p class="help preview-doc-help">Vista previa en <strong>dos columnas</strong> (cabecera + barra lateral + cuerpo), alineada a un CV moderno tipo referencia. Los campos opcionales <code>meta.nombre_completo</code>, <code>meta.titulo_profesional</code>, <code>meta.contacto</code>, <code>certificaciones</code> y <code>fortalezas</code> en el JSON completan cabecera y columna izquierda. La exportación PDF/DOCX sigue usando Markdown.</p>
+{% block title %}{{ cv.meta.nombre_completo or 'CV' }} · Vista previa{% endblock %}
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/cv.css') }}">
+{% endblock %}
+{% block content %}
+<div class="cv-toolbar no-print">
+  <a class="btn" href="{{ url_for('main.cv_edit', cv_id=request.view_args.cv_id) }}">← Volver al editor</a>
+  <a class="btn" href="{{ url_for('main.cv_export_pdf', cv_id=request.view_args.cv_id) }}">📄 PDF</a>
+  <a class="btn" href="{{ url_for('main.cv_export_docx', cv_id=request.view_args.cv_id) }}">📝 DOCX</a>
+  <button class="btn" onclick="window.print()">🖨️ Imprimir</button>
+</div>
 
-  <div class="preview-doc-stage" aria-label="Vista previa del CV">
-    <div class="cv-paper">
-      <div class="cv-paper-inner cv-ref-doc">
-        {% if preview_empty %}
-          <p class="cv-preview-empty">Ahora mismo no hay texto que mostrar: el contexto JSON está vacío o todos los campos van sin contenido.</p>
-          <p class="cv-preview-hint">Completa datos en el <a href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">editor</a>, usa el <a href="{{ url_for('main.cv_interview', cv_id=cv.id) }}">asistente local</a> o <a href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">entrevista MCP</a>, y vuelve a abrir la vista previa.</p>
-        {% else %}
-          {{ preview_html|safe }}
+<article class="cv-sheet">
+  <header class="cv-header">
+    <h1>{{ cv.meta.nombre_completo or 'Nombre Apellido' }}</h1>
+    {% if cv.meta.titulo_profesional %}
+      <p class="cv-title">{{ cv.meta.titulo_profesional }}</p>
+    {% endif %}
+    {% set c = cv.meta.contacto %}
+    {% if c.email or c.telefono or c.linkedin or c.ubicacion %}
+      <p class="cv-contact">
+        {%- for v in [c.email, c.telefono, c.linkedin, c.ubicacion] -%}
+          {%- if v -%}<span>{{ v }}</span>{%- if not loop.last %} · {% endif -%}{%- endif -%}
+        {%- endfor -%}
+      </p>
+    {% endif %}
+  </header>
+
+  {% if cv.perfil_profesional.resumen %}
+    <section class="cv-section">
+      <h2>Perfil profesional</h2>
+      <p>{{ cv.perfil_profesional.resumen }}</p>
+      {% if cv.perfil_profesional.palabras_clave %}
+        <p class="cv-tags">{{ cv.perfil_profesional.palabras_clave | join(' · ') }}</p>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  {% if cv.educacion %}
+    <section class="cv-section">
+      <h2>Educación</h2>
+      {% for ed in cv.educacion %}
+        {% if ed.institucion or ed.titulo %}
+        <div class="cv-item">
+          <div class="cv-item-head">
+            <strong>{{ ed.institucion }}</strong>
+            {% if ed.fecha_inicio or ed.fecha_fin %}
+              <span class="cv-dates">
+                {{ ed.fecha_inicio }}{% if ed.fecha_inicio and ed.fecha_fin %} — {% endif %}{{ ed.fecha_fin }}
+              </span>
+            {% endif %}
+          </div>
+          {% if ed.titulo %}<div class="cv-subtitle">{{ ed.titulo }}{% if ed.estado %} — {{ ed.estado }}{% endif %}</div>{% endif %}
+          {% if ed.ubicacion %}<div class="cv-meta">{{ ed.ubicacion }}</div>{% endif %}
+        </div>
         {% endif %}
-      </div>
-    </div>
-  </div>
+      {% endfor %}
+    </section>
+  {% endif %}
 
-  <details class="preview-raw-markdown card">
-    <summary>Fuente Markdown</summary>
-    <pre class="preview-pre">{% if markdown.strip() %}{{ markdown }}{% else %}(vacío){% endif %}</pre>
-  </details>
+  {% if cv.experiencia %}
+    <section class="cv-section">
+      <h2>Experiencia</h2>
+      {% for exp in cv.experiencia %}
+        {% if exp.cargo or exp.empresa %}
+        <div class="cv-item">
+          <div class="cv-item-head">
+            <strong>{{ exp.cargo }}{% if exp.cargo and exp.empresa %} · {{ exp.empresa }}{% endif %}</strong>
+            {% set dates = exp.fecha_inicio %}
+            {% if exp.actual %}{% set dates = (exp.fecha_inicio ~ ' — Actualidad') if exp.fecha_inicio else 'Actualidad' %}
+            {% elif exp.fecha_fin %}{% set dates = (exp.fecha_inicio ~ ' — ' ~ exp.fecha_fin) if exp.fecha_inicio else exp.fecha_fin %}
+            {% endif %}
+            {% if dates %}<span class="cv-dates">{{ dates }}</span>{% endif %}
+          </div>
+          {% if exp.empresa and exp.cargo and exp.ubicacion %}<div class="cv-subtitle">{{ exp.ubicacion }}</div>{% endif %}
+          {% set bullets = (exp.responsabilidades or []) + (exp.logros or []) %}
+          {% if bullets %}<ul class="cv-bullets">{% for b in bullets %}{% if b %}<li>{{ b }}</li>{% endif %}{% endfor %}</ul>{% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {% if cv.proyectos %}
+    <section class="cv-section">
+      <h2>Proyectos</h2>
+      {% for p in cv.proyectos %}
+        {% if p.nombre %}
+        <div class="cv-item">
+          <div class="cv-item-head"><strong>{{ p.nombre }}</strong></div>
+          {% if p.descripcion %}<p>{{ p.descripcion }}</p>{% endif %}
+          {% if p.tecnologias %}<div class="cv-meta">Tecnologías: {{ p.tecnologias | join(', ') }}</div>{% endif %}
+          {% if p.enlace %}<div class="cv-link"><a href="{{ p.enlace }}" target="_blank">{{ p.enlace }}</a></div>{% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {% set h = cv.habilidades or {} %}
+  {% if h.tecnicas or h.blandas or h.idiomas %}
+    <section class="cv-section">
+      <h2>Habilidades</h2>
+      {% if h.tecnicas %}<p><strong>Técnicas:</strong> {{ h.tecnicas | join(', ') }}</p>{% endif %}
+      {% if h.blandas %}<p><strong>Blandas:</strong> {{ h.blandas | join(', ') }}</p>{% endif %}
+      {% if h.idiomas %}<p><strong>Idiomas:</strong> {{ h.idiomas | join(', ') }}</p>{% endif %}
+    </section>
+  {% endif %}
+
+  {% if cv.certificaciones %}
+    <section class="cv-section">
+      <h2>Certificaciones</h2>
+      <ul class="cv-bullets">{% for c in cv.certificaciones %}<li>{{ c }}</li>{% endfor %}</ul>
+    </section>
+  {% endif %}
+
+  {% if cv.fortalezas %}
+    <section class="cv-section">
+      <h2>Fortalezas</h2>
+      <ul class="cv-bullets">{% for f in cv.fortalezas %}<li>{{ f }}</li>{% endfor %}</ul>
+    </section>
+  {% endif %}
+</article>
 {% endblock %}

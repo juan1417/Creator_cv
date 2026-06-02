@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Mis CVs · {{ app_name }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>Mis CVs</h1>
+  <div class="page-head-actions">
+    <a class="btn" href="{{ url_for('main.cv_import') }}">📥 Importar CV</a>
+    <a class="btn btn-primary" href="{{ url_for('main.cv_new') }}">+ Nuevo CV</a>
+  </div>
+</section>
+
+{% if cvs %}
+<table class="cv-list">
+  <thead>
+    <tr>
+      <th>Título</th>
+      <th>Match con oferta</th>
+      <th>Última edición</th>
+      <th>Acciones</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for cv in cvs %}
+    <tr>
+      <td>
+        <a href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">{{ cv.title }}</a>
+        {% if cv.job_offer %}<br><small class="muted">📌 con oferta</small>{% endif %}
+      </td>
+      <td>
+        {% if cv.match_score is not none %}
+          <span class="match-badge {{ cv.match_score | match_badge_class }}"
+                title="{{ cv.match_summary or '' }}">
+            <strong>{{ cv.match_score }}</strong><small>/100</small>
+          </span>
+          {% if cv.match_summary %}<br><small class="muted">{{ cv.match_summary }}</small>{% endif %}
+        {% else %}
+          <small class="muted">—</small>
+        {% endif %}
+      </td>
+      <td><small>{{ cv.updated_at.strftime('%Y-%m-%d %H:%M') }}</small></td>
+      <td class="actions">
+        <a class="btn btn-sm" href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">Editar</a>
+        <a class="btn btn-sm" href="{{ url_for('main.cv_preview', cv_id=cv.id) }}" target="_blank">Vista previa</a>
+        <a class="btn btn-sm" href="{{ url_for('main.cv_export_pdf', cv_id=cv.id) }}">PDF</a>
+        <a class="btn btn-sm" href="{{ url_for('main.cv_export_docx', cv_id=cv.id) }}">DOCX</a>
+        {% if gemini_enabled %}
+          <button class="btn btn-sm btn-improve" type="button" data-action="improve-dashboard" data-cv-id="{{ cv.id }}">✨ Mejorar</button>
+        {% endif %}
+        <form method="post" action="{{ url_for('main.cv_delete', cv_id=cv.id) }}" style="display:inline"
+              onsubmit="return confirm('¿Eliminar este CV?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-danger" type="submit">Borrar</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<section class="empty-state">
+  <p>No tienes CVs todavía.</p>
+  <a class="btn btn-primary" href="{{ url_for('main.cv_new') }}">Crear mi primer CV</a>
+</section>
+{% endif %}
+{% endblock %}

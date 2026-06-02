@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Importar CV · {{ app_name }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>Importar CV existente</h1>
+  <a class="btn" href="{{ url_for('main.dashboard') }}">← Volver</a>
+</section>
+
+<section class="auth-card" style="max-width:600px;">
+  <p>Sube un <strong>PDF</strong> o <strong>DOCX</strong> con tu CV. La IA extraerá los datos y los volcará al editor, donde podrás revisarlos y adaptarlos a una oferta.</p>
+
+  {% if not gemini_enabled %}
+    <div class="flash flash-warning">
+      ⚠️ La importación usa la IA de Gemini. Configura <code>GEMINI_API_KEY</code> en tu <code>.env</code> para habilitarla.
+    </div>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data"
+        data-loading="true"
+        data-loading-title="Importando tu CV…"
+        data-loading-message="Extrayendo texto y analizándolo con la IA. Esto puede tardar entre 5 y 30 segundos.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <label>
+      Archivo ({{ allowed_extensions | join(', ') }})
+      <input type="file" name="cv_file" accept=".pdf,.docx" required>
+    </label>
+
+    <small class="muted">Tamaño máximo: 10 MB. Si tu PDF está escaneado (solo imágenes), primero conviértelo a texto.</small>
+
+    <button type="submit" class="btn btn-primary" data-default-label="📥 Importar con IA" {% if not gemini_enabled %}disabled{% endif %}>
+      📥 Importar con IA
+    </button>
+  </form>
+
+  <hr style="margin: 24px 0;">
+
+  <p class="muted">¿Prefieres empezar desde cero?
+    <a href="{{ url_for('main.cv_new') }}">Crear CV vacío</a>
+  </p>
+</section>
+{% endblock %}

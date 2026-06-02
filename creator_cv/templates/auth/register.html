@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Crear cuenta · {{ app_name }}{% endblock %}
+{% block content %}
+<section class="auth-card">
+  <h1>Crear cuenta</h1>
+  <form method="post" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>
+      Nombre completo (opcional)
+      <input type="text" name="full_name" value="{{ form.full_name or '' }}">
+    </label>
+    <label>
+      Email
+      <input type="email" name="email" required value="{{ form.email }}">
+      {% if form.errors.email %}<small class="error">{{ form.errors.email }}</small>{% endif %}
+    </label>
+    <label>
+      Contraseña (mín. 8 caracteres)
+      <input type="password" name="password" required minlength="8">
+      {% if form.errors.password %}<small class="error">{{ form.errors.password }}</small>{% endif %}
+    </label>
+    <label>
+      Repetir contraseña
+      <input type="password" name="password_confirm" required minlength="8">
+      {% if form.errors.password_confirm %}<small class="error">{{ form.errors.password_confirm }}</small>{% endif %}
+    </label>
+    <button type="submit" class="btn btn-primary">Crear cuenta</button>
+  </form>
+  <p class="muted">¿Ya tienes cuenta? <a href="{{ url_for('auth.login') }}">Entrar</a></p>
+</section>
+{% endblock %}

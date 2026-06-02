@@ -1,33 +1,23 @@
-# Variables de entorno locales (API keys, etc.)
-.env
-
-# Contexto de CV con datos personales (MCP IA Preguntas)
-mcp-ia-preguntas/context/cv-context.active.json
-mcp-ia-preguntas/context/cv-interview*.pending.json
-mcp-ia-preguntas/context/cv-review-cv*.active.md
-
-# Python / uv
-.venv/
-venv/
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
 *.egg-info/
-.eggs/
-dist/
-build/
+.venv/
+.uv-cache/
+
+# Flask / app
+instance/
+*.sqlite3
+.env
+.flaskenv
+
+# Test / coverage
 .pytest_cache/
-.mypy_cache/
-.ruff_cache/
 .coverage
 htmlcov/
 
-# Flask / local data
-instance/
-*.db
-
-# OS / editor
+# Editors / OS
+.idea/
+.vscode/
 .DS_Store
 Thumbs.db

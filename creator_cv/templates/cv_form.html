@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}{% if cv_id %}Editar CV{% else %}Nuevo CV{% endif %} · {{ app_name }}{% endblock %}
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/cv-form.css') }}">
+{% endblock %}
+{% block content %}
+<form id="cv-form" method="post" action="{% if cv_id %}{{ url_for('main.cv_save', cv_id=cv_id) }}{% else %}{{ url_for('main.cv_new') }}{% endif %}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <header class="form-head">
+    <h1>{% if cv_id %}Editar CV #{{ cv_id }}{% else %}Nuevo CV{% endif %}</h1>
+    <div class="form-head-actions">
+      <a class="btn" href="{{ url_for('main.dashboard') }}">← Volver</a>
+      {% if cv_id %}
+        <a class="btn" href="{{ url_for('main.cv_preview', cv_id=cv_id) }}" target="_blank">Vista previa</a>
+        <a class="btn" href="{{ url_for('main.cv_export_pdf', cv_id=cv_id) }}">📄 PDF</a>
+        <a class="btn" href="{{ url_for('main.cv_export_docx', cv_id=cv_id) }}">📝 DOCX</a>
+        {% if gemini_enabled %}
+          <button class="btn" type="button" data-action="improve"
+                  data-loading="true"
+                  data-loading-title="Mejorando tu CV…"
+                  data-loading-message="Reescribiendo el resumen, los bullets de experiencia y reordenando habilidades. Esto puede tardar entre 5 y 20 segundos.">✨ Mejorar CV</button>
+        {% endif %}
+      {% endif %}
+      <button class="btn btn-primary" type="submit" data-action="save">Guardar</button>
+    </div>
+  </header>
+
+  {# --- Datos personales --- #}
+  <details class="section" open>
+    <summary>1. Datos personales</summary>
+    <div class="grid-2">
+      <label>Nombre completo
+        <input type="text" name="meta.nombre_completo" value="{{ cv.meta.nombre_completo or '' }}" required>
+      </label>
+      <label>Título profesional
+        <input type="text" name="meta.titulo_profesional" value="{{ cv.meta.titulo_profesional or '' }}" placeholder="Ej: Desarrollador Backend">
+      </label>
+      <label>Email
+        <input type="email" name="meta.contacto.email" value="{{ cv.meta.contacto.email or '' }}">
+      </label>
+      <label>Teléfono
+        <input type="text" name="meta.contacto.telefono" value="{{ cv.meta.contacto.telefono or '' }}">
+      </label>
+      <label>LinkedIn
+        <input type="text" name="meta.contacto.linkedin" value="{{ cv.meta.contacto.linkedin or '' }}" placeholder="URL completa">
+      </label>
+      <label>Ubicación
+        <input type="text" name="meta.contacto.ubicacion" value="{{ cv.meta.contacto.ubicacion or '' }}" placeholder="Ciudad, país">
+      </label>
+    </div>
+  </details>
+
+  {# --- Perfil profesional --- #}
+  <details class="section" open>
+    <summary>2. Perfil profesional</summary>
+    <label>Resumen
+      <textarea name="perfil_profesional.resumen" rows="4" placeholder="2-4 líneas describiendo quién eres profesionalmente.">{{ cv.perfil_profesional.resumen or '' }}</textarea>
+    </label>
+    <label>Palabras clave (separadas por coma)
+      <input type="text" name="perfil_profesional.palabras_clave" value="{{ cv.perfil_profesional.palabras_clave | join(', ') if cv.perfil_profesional.palabras_clave else '' }}" placeholder="Python, Flask, AWS, Liderazgo">
+    </label>
+  </details>
+
+  {# --- Experiencia --- #}
+  <details class="section" open>
+    <summary>3. Experiencia</summary>
+    <div id="experiencia-list" class="dynamic-list"></div>
+    <button type="button" class="btn btn-sm" data-add="experiencia">+ Añadir experiencia</button>
+  </details>
+
+  {# --- Educación --- #}
+  <details class="section" open>
+    <summary>4. Educación</summary>
+    <div id="educacion-list" class="dynamic-list"></div>
+    <button type="button" class="btn btn-sm" data-add="educacion">+ Añadir educación</button>
+  </details>
+
+  {# --- Habilidades --- #}
+  <details class="section" open>
+    <summary>5. Habilidades</summary>
+    <div class="chips-group">
+      <fieldset>
+        <legend>Técnicas</legend>
+        <div class="chips" data-chips="habilidades[tecnicas][]">
+          {% for s in cv.habilidades.tecnicas or [] %}<span class="chip">{{ s }}<button type="button" data-remove>×</button><input type="hidden" name="habilidades[tecnicas][]" value="{{ s }}"></span>{% endfor %}
+        </div>
+        <input type="text" data-chip-input="habilidades[tecnicas][]" placeholder="Añadir y Enter…">
+      </fieldset>
+      <fieldset>
+        <legend>Blandas</legend>
+        <div class="chips" data-chips="habilidades[blandas][]">
+          {% for s in cv.habilidades.blandas or [] %}<span class="chip">{{ s }}<button type="button" data-remove>×</button><input type="hidden" name="habilidades[blandas][]" value="{{ s }}"></span>{% endfor %}
+        </div>
+        <input type="text" data-chip-input="habilidades[blandas][]" placeholder="Añadir y Enter…">
+      </fieldset>
+      <fieldset>
+        <legend>Idiomas</legend>
+        <div class="chips" data-chips="habilidades[idiomas][]">
+          {% for s in cv.habilidades.idiomas or [] %}<span class="chip">{{ s }}<button type="button" data-remove>×</button><input type="hidden" name="habilidades[idiomas][]" value="{{ s }}"></span>{% endfor %}
+        </div>
+        <input type="text" data-chip-input="habilidades[idiomas][]" placeholder="Añadir y Enter…">
+      </fieldset>
+    </div>
+  </details>
+
+  {# --- Proyectos --- #}
+  <details class="section">
+    <summary>6. Proyectos</summary>
+    <div id="proyectos-list" class="dynamic-list"></div>
+    <button type="button" class="btn btn-sm" data-add="proyectos">+ Añadir proyecto</button>
+  </details>
+
+  {# --- Certificaciones --- #}
+  <details class="section">
+    <summary>7. Certificaciones</summary>
+    <div class="chips" data-chips="certificaciones[items][]">
+      {% for s in cv.certificaciones or [] %}<span class="chip">{{ s }}<button type="button" data-remove>×</button><input type="hidden" name="certificaciones[items][]" value="{{ s }}"></span>{% endfor %}
+    </div>
+    <input type="text" data-chip-input="certificaciones[items][]" placeholder="Ej: AWS Solutions Architect (2024)">
+  </details>
+
+  {# --- Fortalezas --- #}
+  <details class="section">
+    <summary>8. Fortalezas</summary>
+    <div class="chips" data-chips="fortalezas[items][]">
+      {% for s in cv.fortalezas or [] %}<span class="chip">{{ s }}<button type="button" data-remove>×</button><input type="hidden" name="fortalezas[items][]" value="{{ s }}"></span>{% endfor %}
+    </div>
+    <input type="text" data-chip-input="fortalezas[items][]" placeholder="Ej: Resolución de problemas">
+  </details>
+
+  {# --- Oferta de trabajo + IA --- #}
+  <details class="section" open>
+    <summary>9. Oferta de trabajo</summary>
+    <label>Pega aquí la oferta
+      <textarea name="job_offer" rows="8" placeholder="Pega el texto de la oferta a la que quieres adaptar tu CV…">{{ job_offer or '' }}</textarea>
+    </label>
+    {% if gemini_enabled %}
+      <button class="btn btn-primary" type="button" data-action="adapt"
+              data-loading="true"
+              data-loading-title="Adaptando con IA…"
+              data-loading-message="Iterando hasta alcanzar al menos 70/100 de match. Puede tardar entre 15 segundos y 1 minuto.">🤖 Adaptar a oferta con IA</button>
+      <small class="muted">La IA iterará hasta alcanzar ≥ 70/100 de match (máx. 5 iteraciones). Luego mostrará 3-5 sugerencias.</small>
+    {% else %}
+      <small class="muted">⚠️ La IA no está configurada (falta <code>GEMINI_API_KEY</code> en <code>.env</code>).</small>
+    {% endif %}
+  </details>
+
+  <footer class="form-foot">
+    <button class="btn btn-primary" type="submit" data-action="save">Guardar</button>
+    {% if cv_id %}
+      <a class="btn" href="{{ url_for('main.cv_preview', cv_id=cv_id) }}" target="_blank">Vista previa</a>
+    {% endif %}
+  </footer>
+</form>
+
+{# --- Review panel (after AI adapt) --- #}
+{% if cv_id %}
+<aside id="review-panel" class="review-panel" {% if not review_md %}hidden{% endif %}>
+  <h3>🤖 Sugerencias de la IA</h3>
+  <div id="review-content">{{ review_md or '' }}</div>
+  <button class="btn btn-sm" type="button" data-action="close-review">Cerrar</button>
+</aside>
+{% endif %}
+
+<script id="cv-initial-data" type="application/json">{{ cv | tojson }}</script>
+
+{# --- Templates for dynamic items --- #}
+<template id="tpl-experiencia">
+  <div class="item" data-section="experiencia">
+    <header class="item-head">
+      <strong>Experiencia</strong>
+      <button type="button" class="btn btn-sm btn-danger" data-remove-item>Eliminar</button>
+    </header>
+    <div class="grid-2">
+      <label>Cargo <input type="text" name="experiencia[__IDX__][cargo]"></label>
+      <label>Empresa <input type="text" name="experiencia[__IDX__][empresa]"></label>
+      <label>Ubicación <input type="text" name="experiencia[__IDX__][ubicacion]"></label>
+      <label>Fecha inicio <input type="text" name="experiencia[__IDX__][fecha_inicio]" placeholder="Ej: 2022-01"></label>
+      <label>Fecha fin <input type="text" name="experiencia[__IDX__][fecha_fin]" placeholder="Déjalo vacío si actual"></label>
+      <label class="check"><input type="checkbox" name="experiencia[__IDX__][actual]" value="on"> Trabajo actual</label>
+    </div>
+    <label>Responsabilidades (una por línea)
+      <textarea name="experiencia[__IDX__][responsabilidades]" rows="4"></textarea>
+    </label>
+    <label>Logros (uno por línea)
+      <textarea name="experiencia[__IDX__][logros]" rows="2"></textarea>
+    </label>
+  </div>
+</template>
+
+<template id="tpl-educacion">
+  <div class="item" data-section="educacion">
+    <header class="item-head">
+      <strong>Educación</strong>
+      <button type="button" class="btn btn-sm btn-danger" data-remove-item>Eliminar</button>
+    </header>
+    <div class="grid-2">
+      <label>Institución <input type="text" name="educacion[__IDX__][institucion]"></label>
+      <label>Título <input type="text" name="educacion[__IDX__][titulo]"></label>
+      <label>Ubicación <input type="text" name="educacion[__IDX__][ubicacion]"></label>
+      <label>Estado <input type="text" name="educacion[__IDX__][estado]" placeholder="Ej: En curso / Completado"></label>
+      <label>Fecha inicio <input type="text" name="educacion[__IDX__][fecha_inicio]" placeholder="Ej: 2018"></label>
+      <label>Fecha fin <input type="text" name="educacion[__IDX__][fecha_fin]" placeholder="Ej: 2022"></label>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-proyectos">
+  <div class="item" data-section="proyectos">
+    <header class="item-head">
+      <strong>Proyecto</strong>
+      <button type="button" class="btn btn-sm btn-danger" data-remove-item>Eliminar</button>
+    </header>
+    <label>Nombre <input type="text" name="proyectos[__IDX__][nombre]"></label>
+    <label>Descripción
+      <textarea name="proyectos[__IDX__][descripcion]" rows="3"></textarea>
+    </label>
+    <label>Tecnologías (separadas por coma)
+      <input type="text" name="proyectos[__IDX__][tecnologias]" placeholder="Python, FastAPI, PostgreSQL">
+    </label>
+    <label>Enlace (opcional) <input type="text" name="proyectos[__IDX__][enlace]"></label>
+  </div>
+</template>
+{% endblock %}

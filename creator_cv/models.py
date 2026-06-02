@@ -1,77 +1,80 @@
+"""SQLAlchemy models for the Creator CV app.
+
+The app is multi-user: each :class:`CV` belongs to a :class:`User`.
+The CV data is stored as JSON text in :attr:`CV.context_json` and
+validated with pydantic before persisting.
+"""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import json
+from datetime import datetime
+from typing import Any
 
-from sqlalchemy import ForeignKey, Integer, String, Text, DateTime
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from flask_login import UserMixin
+from werkzeug.security import check_password_hash, generate_password_hash
 
-from creator_cv.extensions import db
-
-
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+from .extensions import db
 
 
-class User(db.Model):
-    __tablename__ = "users"
+class User(UserMixin, db.Model):
+    __tablename__ = "user"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now
-    )
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    full_name = db.Column(db.String(200), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
-    cvs: Mapped[list[CV]] = relationship(
-        back_populates="user",
+    cvs = db.relationship(
+        "CV",
+        backref="user",
+        lazy=True,
         cascade="all, delete-orphan",
-        passive_deletes=True,
+        order_by="CV.updated_at.desc()",
     )
+
+    # --- Password helpers ---
+    def set_password(self, password: str) -> None:
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password: str) -> bool:
+        return check_password_hash(self.password_hash, password)
+
+    def __repr__(self) -> str:  # pragma: no cover - debug only
+        return f"<User {self.id} {self.email}>"
 
 
 class CV(db.Model):
-    __tablename__ = "cvs"
+    __tablename__ = "cv"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        index=True,
-    )
-    title: Mapped[str] = mapped_column(String(255), default="")
-    context_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    review_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
-    chat_history_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=utc_now,
-        onupdate=utc_now,
-    )
-
-    user: Mapped[User] = relationship(back_populates="cvs")
-    sections: Mapped[list[CvSection]] = relationship(
-        back_populates="cv",
-        cascade="all, delete-orphan",
-        order_by="CvSection.sort_order",
-        passive_deletes=True,
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False, default="Mi CV")
+    context_json = db.Column(db.Text, nullable=False, default="{}")
+    job_offer = db.Column(db.Text, nullable=True)
+    review_md = db.Column(db.Text, nullable=True)
+    match_score = db.Column(db.Integer, nullable=True)         # 0-100
+    match_summary = db.Column(db.Text, nullable=True)          # "3/5 skills · 1/1 idiomas · 4 años"
+    match_json = db.Column(db.Text, nullable=True)             # full breakdown
+    match_at = db.Column(db.DateTime, nullable=True)           # when the score was computed
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
     )
 
+    # --- JSON helpers ---
+    def context_dict(self) -> dict[str, Any]:
+        try:
+            return json.loads(self.context_json or "{}")
+        except (ValueError, TypeError):
+            return {}
 
-class CvSection(db.Model):
-    __tablename__ = "cv_sections"
+    def set_context(self, data: dict[str, Any]) -> None:
+        self.context_json = json.dumps(data, ensure_ascii=False)
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    cv_id: Mapped[int] = mapped_column(
-        ForeignKey("cvs.id", ondelete="CASCADE"),
-        index=True,
-    )
-    sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    key: Mapped[str] = mapped_column(String(64))
-    body: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now
-    )
-
-    cv: Mapped[CV] = relationship(back_populates="sections")
+    def __repr__(self) -> str:  # pragma: no cover - debug only
+        return f"<CV {self.id} {self.title!r}>"
