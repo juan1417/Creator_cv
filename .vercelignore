@@ -1,20 +1,12 @@
-# Todo lo que no es la versión estática nueva.
-# Sin esto, Vercel detecta pyproject.toml/.python-version y corre el Flask.
+# Coexisten: Flask (API) + sitio estático
+# - Vercel function: api/index.py + creator_cv/
+# - Sitio estático: index.html, cv-*.html, assets/
 
-# Backend Flask (NO deployar)
-creator_cv/
-mcp-ia-preguntas/
-migrations/
-instance/
-scripts/
-
-# Configuración Python/uv
-pyproject.toml
-uv.lock
-.python-version
-requirements*.txt
-Pipfile*
-poetry.lock
+# Lo que no se deploya
+mcp-ia-preguntas/       # MCP servers (solo para Cursor local)
+migrations/             # Alembic (en Vercel usamos db.create_all())
+instance/               # SQLite local
+scripts/                # scripts de utilidad local
 
 # Datos locales con info personal
 export-cvs.json

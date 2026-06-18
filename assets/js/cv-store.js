@@ -30,7 +30,7 @@ const CvStore = (() => {
     return Storage.get(KEY_CV(id));
   }
 
-  function create({ title = "", context_json = "" } = {}) {
+  function create({ title = "", context_json = "", serverId = null } = {}) {
     const id = _newId();
     const now = new Date().toISOString();
     const cv = {
@@ -39,6 +39,7 @@ const CvStore = (() => {
       context_json: context_json || emptyContextJson(),
       created_at: now,
       updated_at: now,
+      serverId,
     };
     Storage.set(KEY_CV(id), cv);
     _index().push(id);

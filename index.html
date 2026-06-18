@@ -58,12 +58,25 @@
         <button id="btn-import" type="button" class="btn btn-secondary">Importar (.json)</button>
         <input id="file-import" type="file" accept="application/json" hidden />
       </div>
+
+      <h3 class="h3" style="margin-top: 1.25rem;">Sincronizar con el servidor</h3>
+      <p class="help" id="sync-status">
+        Si el deploy tiene backend configurado (Flask + Supabase), podés sincronizar
+        tus CVs entre dispositivos con este botón. Local sigue siendo la fuente primaria.
+      </p>
+      <div class="form-actions">
+        <button id="btn-sync" type="button" class="btn btn-secondary">Sincronizar ahora</button>
+        <button id="btn-sync-check" type="button" class="btn btn-ghost">Verificar servidor</button>
+      </div>
+      <p class="help meta-muted" id="sync-result"></p>
     </section>
   </main>
 
   <script src="/assets/js/storage.js"></script>
   <script src="/assets/js/cv-store.js"></script>
   <script src="/assets/js/shared.js"></script>
+  <script src="/assets/js/api-client.js"></script>
+  <script src="/assets/js/sync.js"></script>
   <script src="/assets/js/import-cvs.js"></script>
   <script src="/assets/js/home.js"></script>
 </body>

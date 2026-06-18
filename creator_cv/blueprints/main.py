@@ -138,6 +138,9 @@ def cv_delete(cv_id: int):
 def cv_interview_mcp(cv_id: int):
     user = get_dev_user()
     cv = _get_cv_or_404(cv_id, user)
+    if not current_app.config.get("CREATOR_CV_INTERVIEW_PENDING_PATH"):
+        flash("La entrevista MCP no está disponible en el deploy. Usá el asistente local o el chat con IA.", "info")
+        return redirect(url_for("main.cv_edit", cv_id=cv.id))
     pending_path = get_pending_interview_path(current_app, cv.id)
     review_path = get_review_markdown_path(current_app, cv.id)
 
@@ -234,6 +237,9 @@ def cv_interview_mcp(cv_id: int):
 def cv_interview_mcp_seed_template(cv_id: int):
     user = get_dev_user()
     cv = _get_cv_or_404(cv_id, user)
+    if not current_app.config.get("CREATOR_CV_INTERVIEW_PENDING_PATH"):
+        flash("La entrevista MCP no está disponible en el deploy.", "info")
+        return redirect(url_for("main.cv_edit", cv_id=cv.id))
     pending_path = get_pending_interview_path(current_app, cv.id)
     try:
         existing = read_pending_file(pending_path)

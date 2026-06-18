@@ -5,6 +5,7 @@
   "installCommand": null,
   "outputDirectory": null,
   "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index.py" },
     { "source": "/cvs/:id/edit", "destination": "/cv-edit.html" },
     { "source": "/cvs/:id/preview", "destination": "/cv-preview.html" },
     { "source": "/cvs/:id/interview", "destination": "/cv-interview.html" },

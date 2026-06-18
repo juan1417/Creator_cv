@@ -106,5 +106,63 @@
     }
   });
 
+  // ── Sync con el backend (Flask) ──
+  const btnSync = document.getElementById("btn-sync");
+  const btnSyncCheck = document.getElementById("btn-sync-check");
+  const syncResult = document.getElementById("sync-result");
+  const syncStatus = document.getElementById("sync-status");
+
+  async function checkBackend() {
+    const ok = await ApiClient.health();
+    if (ok) {
+      syncResult.textContent = "✓ Servidor disponible. Listo para sincronizar.";
+      syncResult.style.color = "var(--color-soft-indigo)";
+    } else {
+      syncResult.textContent = "✗ No se pudo conectar con el servidor. ¿Está deployado el Flask?";
+      syncResult.style.color = "var(--danger-fg)";
+    }
+    return ok;
+  }
+
+  btnSyncCheck.addEventListener("click", async () => {
+    syncResult.textContent = "Verificando…";
+    await checkBackend();
+  });
+
+  btnSync.addEventListener("click", async () => {
+    if (!(await checkBackend())) return;
+    btnSync.disabled = true;
+    btnSync.classList.add("is-loading");
+    const original = btnSync.textContent;
+    btnSync.textContent = "Sincronizando…";
+    syncResult.textContent = "Push + pull en curso…";
+    syncResult.style.color = "var(--color-ash)";
+    try {
+      const r = await CvSync.syncAll();
+      const parts = [];
+      if (r.pushed) parts.push(`${r.pushed} empujados`);
+      if (r.pulled) parts.push(`${r.pulled} traídos`);
+      if (r.push_failed) parts.push(`${r.push_failed} fallaron`);
+      syncResult.textContent = `✓ Sincronización OK (${r.duration_ms}ms). ${parts.join(", ") || "sin cambios"}.`;
+      syncResult.style.color = "var(--color-soft-indigo)";
+      render();
+    } catch (e) {
+      syncResult.textContent = "✗ " + e.message;
+      syncResult.style.color = "var(--danger-fg)";
+    } finally {
+      btnSync.disabled = false;
+      btnSync.classList.remove("is-loading");
+      btnSync.textContent = original;
+    }
+  });
+
+  // Check inicial silencioso
+  checkBackend().then((ok) => {
+    if (!ok) {
+      syncResult.textContent = "El servidor no responde. localStorage sigue funcionando.";
+      syncResult.style.color = "var(--color-ash)";
+    }
+  });
+
   render();
 })();

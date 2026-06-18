@@ -74,19 +74,13 @@
     render();
 
     try {
-      const res = await fetch("/api/gemini", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cv_id: id,
-          user_capacity: cap.value,
-          messages: c.messages,
-          cv_context: CvStore.parseContext(cv),
-        }),
+      const data = await ApiClient.gemini({
+        messages: c.messages,
+        user_capacity: cap.value,
+        cv_context: CvStore.parseContext(cv),
       });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        const msg = (data && (data.error || data.message)) || res.statusText;
+      if (!data || !data.ok) {
+        const msg = (data && data.error) || "Error desconocido";
         const c2 = loadChat();
         c2.messages.push({ role: "assistant", content: "Error: " + msg });
         saveChat(c2);
@@ -101,7 +95,7 @@
       render();
     } catch (err) {
       const c2 = loadChat();
-      c2.messages.push({ role: "assistant", content: "No se pudo conectar con el servidor." });
+      c2.messages.push({ role: "assistant", content: "No se pudo conectar con el servidor: " + (err.message || err) });
       saveChat(c2);
       render();
     } finally {
