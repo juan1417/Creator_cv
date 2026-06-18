@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "rewrites": [
+    { "source": "/cvs/:id/edit", "destination": "/cv-edit.html" },
+    { "source": "/cvs/:id/preview", "destination": "/cv-preview.html" },
+    { "source": "/cvs/:id/interview", "destination": "/cv-interview.html" },
+    { "source": "/cvs/:id/chat", "destination": "/cv-chat.html" },
+    { "source": "/cvs/:id/job-fit", "destination": "/cv-job-fit.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
+  ]
+}
