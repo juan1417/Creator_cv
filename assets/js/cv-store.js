@@ -42,8 +42,11 @@ const CvStore = (() => {
       serverId,
     };
     Storage.set(KEY_CV(id), cv);
-    _index().push(id);
-    _saveIndex(_index());
+    // _index() hace JSON.parse cada vez → array NUEVO.
+    // Hay que leer una sola vez, mutar, y guardar.
+    const idx = _index();
+    idx.push(id);
+    _saveIndex(idx);
     return cv;
   }
 
