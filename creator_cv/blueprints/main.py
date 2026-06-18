@@ -20,12 +20,7 @@ from flask import (
 )
 from sqlalchemy import select
 
-from creator_cv.context_sync import (
-    get_active_context_path,
-    parse_cv_context_json,
-    read_context_file,
-    write_context_file,
-)
+from creator_cv.context_sync import parse_cv_context_json
 from creator_cv.mcp_interview import (
     INTERVIEW_SESSION_SKIP_AUTO_PENDING_KEY,
     PendingInterviewError,
@@ -34,7 +29,6 @@ from creator_cv.mcp_interview import (
     collect_answers,
     get_pending_interview_path,
     get_review_markdown_path,
-    interview_pending_parent_dir,
     pending_template_path,
     question_html,
     read_pending_file,
@@ -105,15 +99,6 @@ def _get_cv_or_404(cv_id: int, user: User) -> CV:
     return cv
 
 
-@bp.app_context_processor
-def inject_mcp_path():
-    app = current_app
-    return {
-        "mcp_context_path": str(get_active_context_path(app)),
-        "mcp_interview_pending_dir": str(interview_pending_parent_dir(app)),
-    }
-
-
 @bp.route("/")
 def index():
     user = get_dev_user()
@@ -131,7 +116,7 @@ def cv_new():
     db.session.add(cv)
     db.session.commit()
     flash("CV creado.", "success")
-    return redirect(url_for("main.cv_edit", cv_id=cv.id))
+    return redirect(url_for("main.cv_interview", cv_id=cv.id))
 
 
 @bp.route("/cvs/<int:cv_id>/delete", methods=["POST"])
@@ -495,45 +480,7 @@ def cv_edit(cv_id: int):
         return redirect(url_for("main.cv_edit", cv_id=cv.id))
 
     text = cv.context_json or ""
-    if not text.strip():
-        text = json.dumps(
-            read_context_file(get_active_context_path(current_app)),
-            ensure_ascii=False,
-            indent=2,
-        )
     return render_template("cv_edit.html", cv=cv, context_text=text)
-
-
-@bp.route("/cvs/<int:cv_id>/sync/from-mcp", methods=["POST"])
-def cv_sync_from_mcp(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    path = get_active_context_path(current_app)
-    try:
-        data = read_context_file(path)
-        cv.context_json = json.dumps(data, ensure_ascii=False, indent=2)
-        db.session.commit()
-        flash(f"Importado desde {path}", "success")
-    except (OSError, json.JSONDecodeError, ValueError) as e:
-        flash(str(e), "error")
-    return redirect(url_for("main.cv_edit", cv_id=cv.id))
-
-
-@bp.route("/cvs/<int:cv_id>/sync/to-mcp", methods=["POST"])
-def cv_sync_to_mcp(cv_id: int):
-    user = get_dev_user()
-    cv = _get_cv_or_404(cv_id, user)
-    path = get_active_context_path(current_app)
-    try:
-        if not cv.context_json or not cv.context_json.strip():
-            flash("No hay contexto en BD para exportar. Guarda o importa primero.", "error")
-            return redirect(url_for("main.cv_edit", cv_id=cv.id))
-        data = parse_cv_context_json(cv.context_json)
-        write_context_file(path, data)
-        flash(f"Exportado a {path}", "success")
-    except (OSError, ValueError) as e:
-        flash(str(e), "error")
-    return redirect(url_for("main.cv_edit", cv_id=cv.id))
 
 
 @bp.route("/cvs/<int:cv_id>/preview")

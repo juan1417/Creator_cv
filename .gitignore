@@ -6,6 +6,9 @@ mcp-ia-preguntas/context/cv-context.active.json
 mcp-ia-preguntas/context/cv-interview*.pending.json
 mcp-ia-preguntas/context/cv-review-cv*.active.md
 
+# Export con datos personales del usuario (no commitear)
+export-cvs.json
+
 # Python / uv
 .venv/
 venv/
@@ -27,6 +30,12 @@ htmlcov/
 # Flask / local data
 instance/
 *.db
+
+# Herramientas locales (OpenCode, Atlantis, logs)
+.atl/
+.opencode/
+tmp_server.err
+tmp_server.out
 
 # OS / editor
 .DS_Store

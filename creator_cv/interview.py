@@ -131,9 +131,23 @@ def build_step_context(step_id: str, data: dict[str, Any]) -> dict[str, Any]:
             {
                 "name": "idioma_cv",
                 "label": "Idioma del CV",
-                "type": "text",
+                "type": "select",
+                "options": [
+                    {"value": "es", "label": "Castellano"},
+                    {"value": "es-ES", "label": "Español (España)"},
+                    {"value": "es-MX", "label": "Español (México)"},
+                    {"value": "es-AR", "label": "Español (Argentina)"},
+                    {"value": "ca", "label": "Català"},
+                    {"value": "gl", "label": "Galego"},
+                    {"value": "eu", "label": "Euskara"},
+                    {"value": "val", "label": "Valencià"},
+                    {"value": "en", "label": "English"},
+                    {"value": "pt", "label": "Português"},
+                    {"value": "fr", "label": "Français"},
+                    {"value": "de", "label": "Deutsch"},
+                ],
                 "value": meta.get("idioma_cv") or "",
-                "hint": "Ej. castellano, español, inglés",
+                "hint": "Elige el idioma principal del CV",
             },
             {
                 "name": "nombre_completo",
@@ -152,23 +166,23 @@ def build_step_context(step_id: str, data: dict[str, Any]) -> dict[str, Any]:
             {
                 "name": "email",
                 "label": "Email",
-                "type": "text",
+                "type": "email",
                 "value": (contact.get("email") or "") if contact else "",
                 "hint": "Opcional",
             },
             {
                 "name": "telefono",
                 "label": "Teléfono",
-                "type": "text",
+                "type": "tel",
                 "value": (contact.get("telefono") or "") if contact else "",
-                "hint": "Opcional",
+                "hint": "Opcional. Con prefijo internacional, ej. +34 612 345 678",
             },
             {
                 "name": "linkedin",
                 "label": "LinkedIn u otro enlace",
-                "type": "text",
+                "type": "url",
                 "value": (contact.get("linkedin") or "") if contact else "",
-                "hint": "Opcional",
+                "hint": "Opcional. URL completa, ej. https://linkedin.com/in/usuario",
             },
             {
                 "name": "ubicacion_contacto",
@@ -187,18 +201,34 @@ def build_step_context(step_id: str, data: dict[str, Any]) -> dict[str, Any]:
             {
                 "name": "tipo_cv",
                 "label": "Tipo de CV (opcional)",
-                "type": "text",
+                "type": "select",
+                "options": [
+                    {"value": "", "label": "Sin especificar"},
+                    {"value": "cronológico", "label": "Cronológico"},
+                    {"value": "funcional", "label": "Funcional"},
+                    {"value": "mixto", "label": "Mixto"},
+                ],
                 "value": meta.get("tipo_cv") or "",
-                "hint": "Cronológico, funcional o mixto",
+                "hint": None,
             },
             {
                 "name": "nivel_seniority",
                 "label": "Nivel (opcional)",
-                "type": "text",
+                "type": "select",
+                "options": [
+                    {"value": "", "label": "Sin especificar"},
+                    {"value": "junior", "label": "Junior"},
+                    {"value": "semi-senior", "label": "Semi-senior"},
+                    {"value": "senior", "label": "Senior"},
+                    {"value": "lead", "label": "Lead / Principal"},
+                ],
                 "value": meta.get("nivel_seniority") or "",
-                "hint": "Ej. junior, semi-senior, senior",
+                "hint": None,
             },
         ]
+
+
+
 
     elif step_id == "perfil":
         ctx["step_title"] = "Perfil profesional"
@@ -225,8 +255,8 @@ def build_step_context(step_id: str, data: dict[str, Any]) -> dict[str, Any]:
             {"name": "empresa", "label": "Empresa", "type": "text", "value": "", "hint": ""},
             {"name": "cargo", "label": "Cargo", "type": "text", "value": "", "hint": ""},
             {"name": "ubicacion", "label": "Ubicación (opcional)", "type": "text", "value": "", "hint": ""},
-            {"name": "fecha_inicio", "label": "Fecha inicio", "type": "text", "value": "", "hint": "ej. 2020-03"},
-            {"name": "fecha_fin", "label": "Fecha fin (si aplica)", "type": "text", "value": "", "hint": ""},
+            {"name": "fecha_inicio", "label": "Fecha inicio", "type": "month", "value": "", "hint": "Mes y año de inicio, ej. marzo 2020"},
+            {"name": "fecha_fin", "label": "Fecha fin (si aplica)", "type": "month", "value": "", "hint": "Déjalo vacío si sigues aquí"},
             {
                 "name": "actual",
                 "label": "Trabajo actual",
@@ -249,7 +279,8 @@ def build_step_context(step_id: str, data: dict[str, Any]) -> dict[str, Any]:
                 "hint": "",
             },
         ]
-        ctx["allow_skip"] = True
+
+
 
     elif step_id == "educacion":
         ctx["step_title"] = "Formación"
@@ -260,17 +291,25 @@ def build_step_context(step_id: str, data: dict[str, Any]) -> dict[str, Any]:
             {"name": "institucion", "label": "Institución", "type": "text", "value": "", "hint": ""},
             {"name": "titulo", "label": "Título / carrera", "type": "text", "value": "", "hint": ""},
             {"name": "ubicacion", "label": "Ubicación (opcional)", "type": "text", "value": "", "hint": ""},
-            {"name": "fecha_inicio", "label": "Inicio", "type": "text", "value": "", "hint": ""},
-            {"name": "fecha_fin", "label": "Fin", "type": "text", "value": "", "hint": ""},
+            {"name": "fecha_inicio", "label": "Inicio", "type": "month", "value": "", "hint": "Mes y año"},
+            {"name": "fecha_fin", "label": "Fin", "type": "month", "value": "", "hint": "Déjalo vacío si sigue en curso"},
             {
                 "name": "estado",
                 "label": "Estado",
-                "type": "text",
+                "type": "select",
+                "options": [
+                    {"value": "", "label": "Sin especificar"},
+                    {"value": "completo", "label": "Completo"},
+                    {"value": "en curso", "label": "En curso"},
+                    {"value": "incompleto", "label": "Incompleto"},
+                    {"value": "pausado", "label": "Pausado"},
+                ],
                 "value": "",
-                "hint": "ej. completo, en curso",
+                "hint": None,
             },
         ]
-        ctx["allow_skip"] = True
+
+
 
     elif step_id == "habilidades":
         ctx["step_title"] = "Habilidades"
@@ -374,10 +413,13 @@ def build_step_context(step_id: str, data: dict[str, Any]) -> dict[str, Any]:
         ctx["fields"] = [
             {
                 "name": "extension_maxima_paginas",
-                "label": "Máximo de páginas (número o vacío)",
-                "type": "text",
+                "label": "Máximo de páginas",
+                "type": "number",
                 "value": "" if ext is None else str(ext),
-                "hint": "",
+                "min": 1,
+                "max": 10,
+                "step": 1,
+                "hint": "Entre 1 y 10. Déjalo vacío si no aplica",
             },
             {
                 "name": "formato_solicitado",
@@ -523,7 +565,11 @@ def apply_step(
         ext_raw = (form.get("extension_maxima_paginas") or "").strip()
         if ext_raw:
             try:
-                data["restricciones"]["extension_maxima_paginas"] = int(ext_raw)
+                n = int(ext_raw)
+                if 1 <= n <= 10:
+                    data["restricciones"]["extension_maxima_paginas"] = n
+                else:
+                    data["restricciones"]["extension_maxima_paginas"] = None
             except ValueError:
                 data["restricciones"]["extension_maxima_paginas"] = None
         else:

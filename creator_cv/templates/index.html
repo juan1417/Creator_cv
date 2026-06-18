@@ -1,13 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Inicio · Creator CV{% endblock %}
 {% block body %}
+  <p class="eyebrow">Panel</p>
   <h1>Creator CV</h1>
-  <p class="lede">Edita el contexto estructurado del CV, sincronízalo con el archivo que usa el MCP en Cursor y descárgalo en Markdown, PDF o Word.</p>
-  <p class="callout" role="note">
-    <strong>Compatibilidad con oferta:</strong> abre un CV → botón azul <strong>Compatibilidad con oferta</strong> o enlace <strong>Compat. oferta</strong> en la lista (pega el texto de la vacante; requiere <code>GEMINI_API_KEY</code>).
-  </p>
+  <p class="lede">Crea, edita y descarga currículums. Empieza con un formulario guiado, ajusta el JSON a mano o usa el chat con IA.</p>
 
   <section class="card" aria-labelledby="new-cv-title">
+    <p class="eyebrow">Nuevo</p>
     <h2 id="new-cv-title">Nuevo CV</h2>
     <form method="post" action="{{ url_for('main.cv_new') }}" class="form-inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -18,16 +17,13 @@
   </section>
 
   <section class="card" aria-labelledby="list-title">
+    <p class="eyebrow">Listado</p>
     <h2 id="list-title">Tus CVs</h2>
     {% if cvs %}
       <ul class="cv-list">
         {% for cv in cvs %}
           <li>
             <a href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">{{ cv.title or "Sin título" }}</a>
-            <a class="meta-muted" href="{{ url_for('main.cv_chat', cv_id=cv.id) }}">Chat IA</a>
-            <a class="meta-muted" href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}">Compat. oferta</a>
-            <a class="meta-muted" href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">MCP</a>
-            <a class="meta-muted" href="{{ url_for('main.cv_interview', cv_id=cv.id) }}">Asistente</a>
             <span class="meta-muted">actualizado {{ cv.updated_at.strftime("%Y-%m-%d %H:%M") if cv.updated_at else "" }}</span>
             <form method="post" action="{{ url_for('main.cv_delete', cv_id=cv.id) }}" class="inline-form cv-delete-form" onsubmit="return confirm('¿Eliminar este CV? Se borrarán el contexto y las secciones asociadas. No se puede deshacer.');">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -40,8 +36,4 @@
       <p class="empty-state">Aún no hay CVs. Crea uno con el formulario de arriba.</p>
     {% endif %}
   </section>
-
-  <aside class="callout" role="note">
-    <strong>Cursor MCP:</strong> el mismo archivo <code>cv-context.active.json</code> puede editarse desde Cursor (Filesystem MCP) y desde aquí con <em>Importar</em> / <em>Exportar</em>. La última escritura prevalece si usas ambos a la vez.
-  </aside>
 {% endblock %}

@@ -3,7 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0a0a0a" />
   <title>{% block title %}Creator CV{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap"
+  />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
   {% block head_extra %}{% endblock %}
 </head>
@@ -12,9 +19,6 @@
   <header class="site-header">
     <div class="wrap">
       <a class="brand" href="{{ url_for('main.index') }}">Creator CV</a>
-      <nav class="nav" aria-label="Principal">
-        <a href="{{ url_for('main.index') }}">Inicio</a>
-      </nav>
     </div>
   </header>
 
@@ -31,10 +35,5 @@
 
     {% block body %}{% endblock %}
   </main>
-
-  <footer class="site-footer wrap">
-    <p class="meta-muted">Contexto MCP: <code>{{ mcp_context_path }}</code></p>
-    <p class="meta-muted">Entrevista MCP: <code>{{ mcp_interview_pending_dir }}</code>/<code>cv-interview.cv&lt;id&gt;.pending.json</code> · Revisión: <code>cv-review-cv&lt;id&gt;.active.md</code> (o <code>CREATOR_CV_REVIEW_PATH</code> con <code>{id}</code>)</p>
-  </footer>
 </body>
 </html>

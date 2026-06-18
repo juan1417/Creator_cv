@@ -1,11 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Asistente · {{ cv.title }}{% endblock %}
 {% block body %}
-  <p class="breadcrumb">
-    <a href="{{ url_for('main.index') }}">Inicio</a> /
-    <a href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">Editor</a> /
-    Asistente
-  </p>
+  <div class="page-header">
+    <a class="page-header__back" href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">
+      <svg class="page-header__back-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Volver al editor
+    </a>
+    <p class="breadcrumb">
+      <a href="{{ url_for('main.index') }}">Inicio</a> /
+      <a href="{{ url_for('main.cv_edit', cv_id=cv.id) }}">Editor</a> /
+      <span aria-current="page">Asistente</span>
+    </p>
+  </div>
 
   <h1>Asistente local</h1>
   <p class="lede interview-page-lede">
@@ -78,13 +86,34 @@
                 {{ field.label }}
               </label>
               {% if field.hint %}<p class="help">{{ field.hint }}</p>{% endif %}
+            {% elif field.type == "select" %}
+              <label for="f-{{ field.name }}">{{ field.label }}</label>
+              {% if field.hint %}<p class="help">{{ field.hint }}</p>{% endif %}
+              <select id="f-{{ field.name }}" name="{{ field.name }}" class="text-input">
+                {% for opt in field.options %}
+                  <option value="{{ opt.value }}" {% if field.value == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+                {% endfor %}
+              </select>
             {% else %}
               <label for="f-{{ field.name }}">{{ field.label }}</label>
               {% if field.hint %}<p class="help">{{ field.hint }}</p>{% endif %}
               {% if field.type == "textarea" %}
                 <textarea id="f-{{ field.name }}" name="{{ field.name }}" rows="5" class="code-area">{{ field.value }}</textarea>
               {% else %}
-                <input id="f-{{ field.name }}" type="text" name="{{ field.name }}" value="{{ field.value }}" class="text-input" autocomplete="off" />
+                <input
+                  id="f-{{ field.name }}"
+                  type="{{ field.type }}"
+                  name="{{ field.name }}"
+                  value="{{ field.value }}"
+                  class="text-input"
+                  {% if field.type == "email" %}autocomplete="email" inputmode="email"{% endif %}
+                  {% if field.type == "tel" %}autocomplete="tel" inputmode="tel"{% endif %}
+                  {% if field.type == "url" %}autocomplete="url" inputmode="url" placeholder="https://"{% endif %}
+                  {% if field.type == "month" or field.type == "date" %}{% endif %}
+                  {% if field.min is defined %}min="{{ field.min }}"{% endif %}
+                  {% if field.max is defined %}max="{{ field.max }}"{% endif %}
+                  {% if field.step is defined %}step="{{ field.step }}"{% endif %}
+                />
               {% endif %}
             {% endif %}
           </div>

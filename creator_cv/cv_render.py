@@ -32,12 +32,56 @@ def _e(value: Any) -> str:
     return html.escape("" if value is None else str(value))
 
 
+def _lines(s: str) -> list[str]:
+    return [ln.strip() for ln in s.splitlines() if ln.strip()] if s else []
+
+
+def _normalize_url(link: str) -> str:
+    """Si la URL no tiene esquema, le antepone https://."""
+    s = (link or "").strip()
+    if not s:
+        return ""
+    if "://" in s:
+        return s
+    if s.startswith("//"):
+        return "https:" + s
+    return "https://" + s
+
+
+def _fmt_date_short(value: str) -> str:
+    """
+    Formatea fechas 'YYYY-MM' o 'YYYY-MM-DD' como 'Mon YYYY' o 'YYYY'.
+    Devuelve el string original si no encaja.
+    """
+    if not value:
+        return ""
+    v = str(value).strip()
+    parts = v.split("-")
+    months = {
+        "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
+        "05": "May", "06": "Jun", "07": "Jul", "08": "Aug",
+        "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dec",
+    }
+    if len(parts) >= 2 and parts[1] in months:
+        return f"{months[parts[1]]} {parts[0]}"
+    return v
+
+
 def _normalize_link_list(links: Any) -> list[str]:
     """Lista de enlaces o un solo string con URLs separadas por comas."""
     if links is None:
         return []
     if isinstance(links, list):
-        return [str(x).strip() for x in links if str(x).strip()]
+        result: list[str] = []
+        for x in links:
+            s = str(x).strip()
+            if not s:
+                continue
+            for part in s.split(","):
+                p = part.strip()
+                if p:
+                    result.append(p)
+        return result
     if isinstance(links, str):
         s = links.strip()
         if not s:
@@ -46,7 +90,19 @@ def _normalize_link_list(links: Any) -> list[str]:
     return []
 
 
-def _contact_line(meta: dict[str, Any]) -> list[tuple[str, str]]:
+def _clean_url_for_compare(url: str) -> str:
+    """Limpia una URL para comparar dos enlaces (ignora scheme y www)."""
+    u = url.strip().lower()
+    for prefix in ("https://", "http://", "www."):
+        if u.startswith(prefix):
+            u = u[len(prefix):]
+    return u.rstrip("/")
+
+
+def _contact_line(
+    meta: dict[str, Any],
+    data: dict[str, Any] | None = None,
+) -> list[tuple[str, str]]:
     """Pares (etiqueta, valor) para la cabecera; solo entradas con texto."""
     raw = meta.get("contacto")
     if not isinstance(raw, dict):
@@ -65,6 +121,22 @@ def _contact_line(meta: dict[str, Any]) -> list[tuple[str, str]]:
         s = str(val).strip()
         if s:
             out.append((label, s))
+
+    # Agregar portafolio desde recursos_actuales.links
+    if data:
+        rec = data.get("recursos_actuales") or {}
+        links = _normalize_link_list(rec.get("links"))
+        if links:
+            linkedin_raw = (raw.get("linkedin") or "").strip()
+            linkedin_clean = _clean_url_for_compare(linkedin_raw)
+            for link in links:
+                link_stripped = link.strip()
+                if not link_stripped:
+                    continue
+                if _clean_url_for_compare(link_stripped) == linkedin_clean:
+                    continue
+                out.append(("Portafolio", link_stripped))
+
     return out
 
 
@@ -134,8 +206,8 @@ def context_has_preview_content(data: dict[str, Any]) -> bool:
 
 
 def _exp_date_range(item: dict[str, Any]) -> str:
-    fin = item.get("fecha_fin") or ("actual" if item.get("actual") else "")
-    parts = [x for x in (item.get("fecha_inicio") or "", fin) if x]
+    fin = item.get("fecha_fin") or ("Present" if item.get("actual") else "")
+    parts = [_fmt_date_short(x) for x in (item.get("fecha_inicio") or "", fin) if x]
     return " – ".join(parts)
 
 
@@ -145,7 +217,8 @@ def context_to_structured_preview_html(
     fallback_title: str = "",
 ) -> str:
     """
-    HTML semántico para vista previa (diseño dos columnas, estilo CV moderno).
+    HTML semántico para vista previa (estilo Harvard: una columna, lineal,
+    texto en negro, jerarquía por peso y tamaño).
     Todo el texto de usuario pasa por escape HTML.
     """
     parts: list[str] = []
@@ -153,123 +226,36 @@ def context_to_structured_preview_html(
     nombre = (meta.get("nombre_completo") or "").strip()
     if not nombre and fallback_title:
         nombre = fallback_title.strip()
-    subtitle = (meta.get("titulo_profesional") or "").strip() or (
-        meta.get("objetivo_cv") or ""
-    ).strip()
 
     parts.append('<article class="cv-ref">')
+
     parts.append('<header class="cv-ref__header">')
     if nombre:
-        parts.append(f'<h1 class="cv-ref__name">{_e(nombre.upper())}</h1>')
-    if subtitle:
-        parts.append(f'<p class="cv-ref__subtitle">{_e(subtitle)}</p>')
-    contact = _contact_line(meta)
+        parts.append(f'<h1 class="cv-ref__name">{_e(nombre)}</h1>')
+    contact = _contact_line(meta, data)
     if contact:
-        parts.append('<ul class="cv-ref__contact" role="list">')
-        for label, val in contact:
-            parts.append(
-                '<li>'
-                f'<span class="cv-ref__contact-label">{_e(label)}</span> '
-                f'<span class="cv-ref__contact-val">{_e(val)}</span>'
-                "</li>"
-            )
-        parts.append("</ul>")
+        parts.append('<p class="cv-ref__contact-line">')
+        for i, (label, val) in enumerate(contact):
+            if i > 0:
+                parts.append('<span class="cv-ref__sep" aria-hidden="true">|</span> ')
+            if label == "Portafolio":
+                url = _normalize_url(val)
+                parts.append(
+                    f'<span class="cv-ref__contact-val">'
+                    f'<a href="{_e(url)}" target="_blank" rel="noopener noreferrer" '
+                    f'class="cv-ref__proj-link-anchor">{_e(val)}</a>'
+                    f'</span>'
+                )
+            else:
+                parts.append(f'<span class="cv-ref__contact-val">{_e(val)}</span>')
+        parts.append("</p>")
     parts.append("</header>")
-
-    aside_parts: list[str] = []
-    certs = data.get("certificaciones") or []
-    if isinstance(certs, list) and certs:
-        cert_body: list[str] = []
-        for c in certs:
-            if not isinstance(c, dict):
-                cert_body.append(f'<p class="cv-ref__cert-line">{_e(c)}</p>')
-                continue
-            name = (c.get("nombre") or c.get("titulo") or "").strip()
-            desc = (c.get("descripcion") or c.get("detalle") or "").strip()
-            if name:
-                cert_body.append(f'<h3 class="cv-ref__cert-name">{_e(name)}</h3>')
-            if desc:
-                cert_body.append(f'<p class="cv-ref__cert-desc">{_e(desc)}</p>')
-        if cert_body:
-            aside_parts.append('<section class="cv-ref__section">')
-            aside_parts.append('<h2 class="cv-ref__section-title">Certificación</h2>')
-            aside_parts.extend(cert_body)
-            aside_parts.append("</section>")
-
-    strengths = data.get("fortalezas") or []
-    if isinstance(strengths, list) and strengths:
-        str_body: list[str] = []
-        for s in strengths:
-            if not isinstance(s, dict):
-                str_body.append(f'<p class="cv-ref__str-item">{_e(s)}</p>')
-                continue
-            st = (s.get("titulo") or s.get("nombre") or "").strip()
-            sd = (s.get("descripcion") or "").strip()
-            if not st and not sd:
-                continue
-            str_body.append('<div class="cv-ref__str">')
-            str_body.append('<span class="cv-ref__str-marker" aria-hidden="true"></span>')
-            str_body.append('<div class="cv-ref__str-text">')
-            if st:
-                str_body.append(f'<strong class="cv-ref__str-title">{_e(st)}</strong>')
-            if sd:
-                str_body.append(f'<p class="cv-ref__str-desc">{_e(sd)}</p>')
-            str_body.append("</div></div>")
-        if str_body:
-            aside_parts.append('<section class="cv-ref__section">')
-            aside_parts.append('<h2 class="cv-ref__section-title">Fortalezas</h2>')
-            aside_parts.extend(str_body)
-            aside_parts.append("</section>")
-
-    hab = data.get("habilidades") or {}
-    perfil_kw = (data.get("perfil_profesional") or {}).get("palabras_clave") or []
-    tech = _merge_tecnicas_lists(hab.get("tecnicas"), perfil_kw)
-    soft = hab.get("blandas") or []
-    langs = hab.get("idiomas") or []
-    if tech or soft or langs:
-        aside_parts.append('<section class="cv-ref__section">')
-        aside_parts.append('<h2 class="cv-ref__section-title">Habilidades</h2>')
-        if tech:
-            aside_parts.append('<p class="cv-ref__skills-sub">Técnicas</p>')
-            aside_parts.append('<div class="cv-ref__pills">')
-            for t in tech:
-                aside_parts.append(f'<span class="cv-ref__pill">{_e(t)}</span>')
-            aside_parts.append("</div>")
-        if soft:
-            aside_parts.append('<p class="cv-ref__skills-sub">Blandas</p>')
-            aside_parts.append('<ul class="cv-ref__list cv-ref__list--plain">')
-            for item in soft:
-                aside_parts.append(f"<li>{_e(item)}</li>")
-            aside_parts.append("</ul>")
-        if langs:
-            aside_parts.append('<p class="cv-ref__skills-sub">Idiomas</p>')
-            aside_parts.append('<ul class="cv-ref__list cv-ref__list--muted">')
-            for item in langs:
-                aside_parts.append(f"<li>{_e(item)}</li>")
-            aside_parts.append("</ul>")
-        aside_parts.append("</section>")
-
-    aside_html = "".join(aside_parts)
-    grid_class = (
-        "cv-ref__grid cv-ref__grid--single"
-        if not aside_html
-        else "cv-ref__grid"
-    )
-    parts.append(f'<div class="{grid_class}">')
-    if aside_html:
-        parts.append(
-            '<aside class="cv-ref__aside" aria-label="Certificaciones y habilidades">'
-        )
-        parts.append(aside_html)
-        parts.append("</aside>")
-
-    parts.append('<div class="cv-ref__main">')
 
     perfil = data.get("perfil_profesional") or {}
     resumen = (perfil.get("resumen") or "").strip()
     if resumen:
         parts.append('<section class="cv-ref__section">')
-        parts.append('<h2 class="cv-ref__section-title">Perfil profesional</h2>')
+        parts.append('<h2 class="cv-ref__section-title">Perfil Profesional</h2>')
         parts.append(f'<p class="cv-ref__para">{_e(resumen)}</p>')
         parts.append("</section>")
 
@@ -279,91 +265,134 @@ def context_to_structured_preview_html(
         parts.append('<h2 class="cv-ref__section-title">Experiencia</h2>')
         for item in exp:
             if not isinstance(item, dict):
-                parts.append(f'<p class="cv-ref__para">{_e(item)}</p>')
+                parts.append(f'<p class="cv-ref__entry">{_e(item)}</p>')
                 continue
             cargo = (item.get("cargo") or "").strip()
             org = (item.get("empresa") or "").strip()
             loc = (item.get("ubicacion") or "").strip()
             drange = _exp_date_range(item)
-            parts.append('<div class="cv-ref__timeline-item">')
-            parts.append('<div class="cv-ref__job-head">')
-            parts.append('<div class="cv-ref__job-titles">')
+            parts.append('<div class="cv-ref__entry">')
+            parts.append('<div class="cv-ref__entry-head">')
+            parts.append('<div class="cv-ref__entry-main">')
             if cargo:
-                parts.append(f'<div class="cv-ref__role">{_e(cargo)}</div>')
+                parts.append(f'<span class="cv-ref__entry-role">{_e(cargo)}</span>')
             if org:
-                parts.append(f'<div class="cv-ref__org">{_e(org)}</div>')
+                parts.append(f'<span class="cv-ref__entry-org">, {_e(org)}</span>')
             parts.append("</div>")
-            parts.append('<div class="cv-ref__job-meta">')
+            parts.append('<div class="cv-ref__entry-aside">')
             if drange:
-                parts.append(
-                    f'<span class="cv-ref__meta cv-ref__meta--date">{_e(drange)}</span>'
-                )
+                parts.append(f'<span class="cv-ref__entry-date">{_e(drange)}</span>')
             if loc:
-                parts.append(
-                    f'<span class="cv-ref__meta cv-ref__meta--loc">{_e(loc)}</span>'
-                )
+                parts.append(f'<span class="cv-ref__entry-loc">{_e(loc)}</span>')
             parts.append("</div></div>")
-            for label, key in (
-                ("Responsabilidades", "responsabilidades"),
-                ("Logros", "logros"),
-            ):
+            for key in ("responsabilidades", "logros"):
                 val = item.get(key)
                 if not val:
                     continue
-                parts.append(f'<p class="cv-ref__label">{_e(label)}</p>')
-                if isinstance(val, list):
-                    parts.append('<ul class="cv-ref__list">')
-                    for row in val:
+                rows = val if isinstance(val, list) else _lines(str(val))
+                if rows:
+                    parts.append('<ul class="cv-ref__bullets">')
+                    for row in rows:
                         parts.append(f"<li>{_e(row)}</li>")
                     parts.append("</ul>")
-                else:
-                    parts.append(f'<p class="cv-ref__para">{_e(val)}</p>')
             parts.append("</div>")
         parts.append("</section>")
 
-    edu = data.get("educacion") or []
-    if isinstance(edu, list) and edu:
+    hab = data.get("habilidades") or {}
+    perfil_kw = (perfil.get("palabras_clave") or [])
+    tech = _merge_tecnicas_lists(hab.get("tecnicas"), perfil_kw)
+    soft = hab.get("blandas") or []
+    langs = hab.get("idiomas") or []
+    if tech or soft or langs:
         parts.append('<section class="cv-ref__section">')
-        parts.append('<h2 class="cv-ref__section-title">Educación</h2>')
-        for item in edu:
-            if not isinstance(item, dict):
-                parts.append(f'<p class="cv-ref__para">{_e(item)}</p>')
-                continue
-            titulo = (item.get("titulo") or "").strip()
-            inst = (item.get("institucion") or "").strip()
-            loc = (item.get("ubicacion") or "").strip()
-            extra: list[str] = []
-            if item.get("fecha_inicio") or item.get("fecha_fin"):
-                extra.append(
-                    " – ".join(
-                        x
-                        for x in (
-                            item.get("fecha_inicio") or "",
-                            item.get("fecha_fin") or "",
+        parts.append('<h2 class="cv-ref__section-title">Habilidades</h2>')
+        if tech:
+            parts.append(
+                '<p class="cv-ref__skills-row">'
+                f'<span class="cv-ref__skills-label">Técnicas:</span> '
+                f'<span class="cv-ref__skills-val">{_e(", ".join(str(x) for x in tech))}</span>'
+                "</p>"
+            )
+        if soft:
+            parts.append(
+                '<p class="cv-ref__skills-row">'
+                f'<span class="cv-ref__skills-label">Habilidades Blandas:</span> '
+                f'<span class="cv-ref__skills-val">{_e(", ".join(str(x) for x in soft))}</span>'
+                "</p>"
+            )
+        if langs:
+            parts.append(
+                '<p class="cv-ref__skills-row">'
+                f'<span class="cv-ref__skills-label">Idiomas:</span> '
+                f'<span class="cv-ref__skills-val">{_e(", ".join(str(x) for x in langs))}</span>'
+                "</p>"
+            )
+        parts.append("</section>")
+
+    edu = data.get("educacion") or []
+    certs = data.get("certificaciones") or []
+    has_edu = isinstance(edu, list) and bool(edu)
+    has_certs = isinstance(certs, list) and bool(certs)
+    if has_edu or has_certs:
+        parts.append('<section class="cv-ref__section">')
+        parts.append('<h2 class="cv-ref__section-title">Educación y Certificaciones</h2>')
+        if has_edu:
+            for item in edu:
+                if not isinstance(item, dict):
+                    parts.append(f'<p class="cv-ref__entry">{_e(item)}</p>')
+                    continue
+                titulo = (item.get("titulo") or "").strip()
+                inst = (item.get("institucion") or "").strip()
+                loc = (item.get("ubicacion") or "").strip()
+                drange_parts: list[str] = []
+                if item.get("fecha_inicio") or item.get("fecha_fin"):
+                    drange_parts.append(
+                        " – ".join(
+                            x
+                            for x in (
+                                item.get("fecha_inicio") or "",
+                                item.get("fecha_fin") or "Present",
+                            )
+                            if x
                         )
-                        if x
                     )
-                )
-            if item.get("estado"):
-                extra.append(str(item["estado"]))
-            parts.append('<div class="cv-ref__edu-item">')
-            parts.append('<div class="cv-ref__job-head">')
-            parts.append('<div class="cv-ref__job-titles">')
-            if titulo:
-                parts.append(f'<div class="cv-ref__role">{_e(titulo)}</div>')
-            if inst:
-                parts.append(f'<div class="cv-ref__org">{_e(inst)}</div>')
-            parts.append("</div>")
-            parts.append('<div class="cv-ref__job-meta">')
-            if extra:
-                parts.append(
-                    f'<span class="cv-ref__meta cv-ref__meta--date">{_e("; ".join(extra))}</span>'
-                )
-            if loc:
-                parts.append(
-                    f'<span class="cv-ref__meta cv-ref__meta--loc">{_e(loc)}</span>'
-                )
-            parts.append("</div></div></div>")
+                if item.get("estado"):
+                    drange_parts.append(str(item["estado"]))
+                drange = " · ".join(drange_parts)
+                parts.append('<div class="cv-ref__entry">')
+                parts.append('<div class="cv-ref__entry-head">')
+                parts.append('<div class="cv-ref__entry-main">')
+                if inst:
+                    parts.append(f'<span class="cv-ref__entry-org">{_e(inst)}</span>')
+                if titulo:
+                    if inst:
+                        parts.append(" — ")
+                    parts.append(f'<span class="cv-ref__entry-role">{_e(titulo)}</span>')
+                parts.append("</div>")
+                parts.append('<div class="cv-ref__entry-aside">')
+                if drange:
+                    parts.append(f'<span class="cv-ref__entry-date">{_e(drange)}</span>')
+                if loc:
+                    parts.append(f'<span class="cv-ref__entry-loc">{_e(loc)}</span>')
+                parts.append("</div></div>")
+                parts.append("</div>")
+        if has_certs:
+            for c in certs:
+                if not isinstance(c, dict):
+                    parts.append(f'<p class="cv-ref__entry">{_e(c)}</p>')
+                    continue
+                name = (c.get("nombre") or c.get("titulo") or "").strip()
+                desc = (c.get("descripcion") or c.get("detalle") or "").strip()
+                if not name and not desc:
+                    continue
+                parts.append('<div class="cv-ref__entry">')
+                if name:
+                    parts.append(f'<span class="cv-ref__entry-role">{_e(name)}</span>')
+                if desc:
+                    parts.append(
+                        f'<span class="cv-ref__entry-org"> — {_e(desc)}</span>'
+                    )
+                parts.append("</div>")
         parts.append("</section>")
 
     proy = data.get("proyectos") or []
@@ -372,30 +401,68 @@ def context_to_structured_preview_html(
         parts.append('<h2 class="cv-ref__section-title">Proyectos</h2>')
         for item in proy:
             if not isinstance(item, dict):
-                parts.append(f'<p class="cv-ref__para">{_e(item)}</p>')
+                parts.append(f'<p class="cv-ref__entry">{_e(item)}</p>')
                 continue
-            name = (item.get("nombre") or "Proyecto").strip()
-            parts.append("<div>")
-            parts.append(f'<h3 class="cv-ref__proj-name">{_e(name)}</h3>')
-            if item.get("descripcion"):
+            name = (item.get("nombre") or "").strip()
+            desc = (item.get("descripcion") or "").strip()
+            tec = item.get("tecnologias") or []
+            link = (item.get("enlace") or "").strip()
+            parts.append('<div class="cv-ref__entry">')
+            if name:
                 parts.append(
-                    f'<p class="cv-ref__para">{_e(item["descripcion"])}</p>'
+                    f'<div class="cv-ref__proj-name">{_e(name)}</div>'
                 )
-            if item.get("tecnologias"):
-                tec = item["tecnologias"]
-                if isinstance(tec, list):
+            has_meta = desc or (isinstance(tec, list) and tec) or link
+            if has_meta:
+                parts.append('<div class="cv-ref__proj-meta">')
+                if desc:
+                    parts.append(f'<span class="cv-ref__proj-desc">{_e(desc)}</span>')
+                if isinstance(tec, list) and tec:
                     parts.append(
-                        '<p class="cv-ref__keywords"><strong>Tecnologías:</strong> '
-                        f'{_e(", ".join(str(x) for x in tec))}</p>'
+                        '<span class="cv-ref__proj-tech">'
+                        f'<span class="cv-ref__proj-tech-label">Tecnologías:</span> '
+                        f'<span class="cv-ref__proj-tech-val">{_e(", ".join(str(x) for x in tec))}</span>'
+                        "</span>"
                     )
-            if item.get("enlace"):
-                parts.append(
-                    f'<p class="cv-ref__link"><strong>Enlace:</strong> {_e(item["enlace"])}</p>'
-                )
+                if link:
+                    href = _normalize_url(link)
+                    parts.append(
+                        '<span class="cv-ref__proj-link">'
+                        f'<span class="cv-ref__proj-link-label">Enlace:</span> '
+                        f'<a class="cv-ref__proj-link-anchor" href="{_e(href)}" target="_blank" rel="noopener noreferrer">{_e(link)}</a>'
+                        "</span>"
+                    )
+                parts.append("</div>")
             parts.append("</div>")
         parts.append("</section>")
 
-    parts.append("</div></div></article>")
+    strengths = data.get("fortalezas") or []
+    if isinstance(strengths, list) and strengths:
+        rows: list[str] = []
+        for s in strengths:
+            if not isinstance(s, dict):
+                v = (str(s) or "").strip()
+                if v:
+                    rows.append(v)
+                continue
+            st = (s.get("titulo") or s.get("nombre") or "").strip()
+            sd = (s.get("descripcion") or "").strip()
+            if st and sd:
+                rows.append(f"{st}: {sd}")
+            elif st:
+                rows.append(st)
+            elif sd:
+                rows.append(sd)
+        if rows:
+            parts.append('<section class="cv-ref__section">')
+            parts.append('<h2 class="cv-ref__section-title">Adicional</h2>')
+            parts.append('<ul class="cv-ref__bullets">')
+            for row in rows:
+                parts.append(f"<li>{_e(row)}</li>")
+            parts.append("</ul>")
+            parts.append("</section>")
+
+    parts.append("</article>")
     return "".join(parts)
 
 
@@ -466,18 +533,24 @@ async def _render_html_to_pdf_with_playwright(html_doc: str) -> bytes:
             "y luego: uv run playwright install chromium"
         ) from e
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch()
-        try:
-            page = await browser.new_page()
-            await page.set_content(html_doc, wait_until="networkidle")
-            return await page.pdf(
-                format="A4",
-                print_background=True,
-                margin={"top": "0mm", "right": "0mm", "bottom": "0mm", "left": "0mm"},
-            )
-        finally:
-            await browser.close()
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            try:
+                page = await browser.new_page()
+                await page.set_content(html_doc, wait_until="networkidle")
+                return await page.pdf(
+                    format="A4",
+                    print_background=True,
+                    margin={"top": "0mm", "right": "0mm", "bottom": "0mm", "left": "0mm"},
+                )
+            finally:
+                await browser.close()
+    except Exception as e:
+        raise RuntimeError(
+            f"Playwright falló al renderizar: {e}. "
+            "Ejecuta: uv run playwright install chromium"
+        ) from e
 
 
 def context_to_pdf_bytes_from_preview(
@@ -533,55 +606,26 @@ def json_to_markdown(data: dict[str, Any]) -> str:
                 lines.append(f"- **{key}**: {val}")
         contact = meta.get("contacto")
         if isinstance(contact, dict):
-            for ck, label in (
-                ("telefono", "Teléfono"),
-                ("email", "Email"),
-                ("linkedin", "LinkedIn"),
-                ("ubicacion", "Ubicación"),
-            ):
+            contact_parts: list[str] = []
+            for ck in ("telefono", "email", "linkedin", "ubicacion"):
                 cv = contact.get(ck)
                 if cv and str(cv).strip():
-                    lines.append(f"- **{label}**: {cv}")
-        lines.append("")
-
-    certs = data.get("certificaciones") or []
-    if isinstance(certs, list) and certs:
-        lines.append("## Certificaciones")
-        for c in certs:
-            if not isinstance(c, dict):
-                lines.append(f"- {_fmt_val(c)}")
-                continue
-            name = (c.get("nombre") or c.get("titulo") or "").strip()
-            desc = (c.get("descripcion") or c.get("detalle") or "").strip()
-            if name and desc:
-                lines.append(f"- **{name}**: {desc}")
-            elif name:
-                lines.append(f"- **{name}**")
-            elif desc:
-                lines.append(f"- {desc}")
-        lines.append("")
-
-    strengths = data.get("fortalezas") or []
-    if isinstance(strengths, list) and strengths:
-        lines.append("## Fortalezas")
-        for s in strengths:
-            if not isinstance(s, dict):
-                lines.append(f"- {_fmt_val(s)}")
-                continue
-            st = (s.get("titulo") or s.get("nombre") or "").strip()
-            sd = (s.get("descripcion") or "").strip()
-            if st and sd:
-                lines.append(f"- **{st}**: {sd}")
-            elif st:
-                lines.append(f"- **{st}**")
-            elif sd:
-                lines.append(f"- {sd}")
+                    contact_parts.append(str(cv).strip())
+            # Agregar portafolio desde recursos_actuales.links (dedup LinkedIn)
+            rec = data.get("recursos_actuales") or {}
+            linkedin_raw = (contact.get("linkedin") or "").strip()
+            for link in _normalize_link_list(rec.get("links")):
+                link_stripped = link.strip()
+                if link_stripped and _clean_url_for_compare(link_stripped) != _clean_url_for_compare(linkedin_raw):
+                    contact_parts.append(link_stripped)
+            if contact_parts:
+                lines.append("- " + " | ".join(contact_parts))
         lines.append("")
 
     perfil = data.get("perfil_profesional") or {}
     resumen = (perfil.get("resumen") or "").strip()
     if resumen:
-        lines.append("## Perfil profesional")
+        lines.append("## Perfil Profesional")
         lines.append(resumen)
         lines.append("")
 
@@ -594,14 +638,14 @@ def json_to_markdown(data: dict[str, Any]) -> str:
                 continue
             title = item.get("cargo") or ""
             org = item.get("empresa") or ""
-            head = " · ".join(x for x in (title, org) if x)
+            head = ", ".join(x for x in (title, org) if x)
             if head:
                 lines.append(f"### {head}")
             dates = " – ".join(
-                x
+                _fmt_date_short(x)
                 for x in (
                     item.get("fecha_inicio") or "",
-                    item.get("fecha_fin") or ("actual" if item.get("actual") else ""),
+                    item.get("fecha_fin") or ("Present" if item.get("actual") else ""),
                 )
                 if x
             )
@@ -623,36 +667,6 @@ def json_to_markdown(data: dict[str, Any]) -> str:
                     lines.append(f"**{label}:** {val}")
             lines.append("")
 
-    edu = data.get("educacion") or []
-    if edu:
-        lines.append("## Educación")
-        for item in edu:
-            if not isinstance(item, dict):
-                lines.append(f"- {_fmt_val(item)}")
-                continue
-            t = item.get("titulo") or ""
-            inst = item.get("institucion") or ""
-            head = " · ".join(x for x in (t, inst) if x)
-            line = f"- {head}" if head else f"- {_fmt_val(item)}"
-            extra = []
-            if item.get("fecha_inicio") or item.get("fecha_fin"):
-                extra.append(
-                    " – ".join(
-                        x
-                        for x in (
-                            item.get("fecha_inicio") or "",
-                            item.get("fecha_fin") or "",
-                        )
-                        if x
-                    )
-                )
-            if item.get("estado"):
-                extra.append(str(item["estado"]))
-            if extra:
-                line += " (" + "; ".join(extra) + ")"
-            lines.append(line)
-        lines.append("")
-
     hab = data.get("habilidades") or {}
     if hab:
         perfil_kw = (data.get("perfil_profesional") or {}).get("palabras_clave") or []
@@ -664,10 +678,57 @@ def json_to_markdown(data: dict[str, Any]) -> str:
             if tech:
                 lines.append("**Técnicas:** " + ", ".join(str(x) for x in tech))
             if soft:
-                lines.append("**Blandas:** " + ", ".join(str(x) for x in soft))
+                lines.append("**Habilidades Blandas:** " + ", ".join(str(x) for x in soft))
             if langs:
                 lines.append("**Idiomas:** " + ", ".join(str(x) for x in langs))
             lines.append("")
+
+    edu = data.get("educacion") or []
+    certs = data.get("certificaciones") or []
+    has_edu = isinstance(edu, list) and bool(edu)
+    has_certs = isinstance(certs, list) and bool(certs)
+    if has_edu or has_certs:
+        lines.append("## Educación y Certificaciones")
+        if has_edu:
+            for item in edu:
+                if not isinstance(item, dict):
+                    lines.append(f"- {_fmt_val(item)}")
+                    continue
+                t = item.get("titulo") or ""
+                inst = item.get("institucion") or ""
+                head = " — ".join(x for x in (inst, t) if x)
+                line = f"- {head}" if head else f"- {_fmt_val(item)}"
+                extra = []
+                if item.get("fecha_inicio") or item.get("fecha_fin"):
+                    extra.append(
+                        " – ".join(
+                            x
+                            for x in (
+                                _fmt_date_short(item.get("fecha_inicio") or ""),
+                                _fmt_date_short(item.get("fecha_fin") or "Present"),
+                            )
+                            if x
+                        )
+                    )
+                if item.get("estado"):
+                    extra.append(str(item["estado"]))
+                if extra:
+                    line += " (" + "; ".join(extra) + ")"
+                lines.append(line)
+        if has_certs:
+            for c in certs:
+                if not isinstance(c, dict):
+                    lines.append(f"- {_fmt_val(c)}")
+                    continue
+                name = (c.get("nombre") or c.get("titulo") or "").strip()
+                desc = (c.get("descripcion") or c.get("detalle") or "").strip()
+                if name and desc:
+                    lines.append(f"- **{name}**: {desc}")
+                elif name:
+                    lines.append(f"- **{name}**")
+                elif desc:
+                    lines.append(f"- {desc}")
+        lines.append("")
 
     proy = data.get("proyectos") or []
     if proy:
@@ -676,7 +737,7 @@ def json_to_markdown(data: dict[str, Any]) -> str:
             if not isinstance(item, dict):
                 lines.append(f"- {_fmt_val(item)}")
                 continue
-            name = item.get("nombre") or "Proyecto"
+            name = (item.get("nombre") or "Proyecto").strip()
             lines.append(f"### {name}")
             if item.get("descripcion"):
                 lines.append(str(item["descripcion"]))
@@ -685,21 +746,37 @@ def json_to_markdown(data: dict[str, Any]) -> str:
                 if isinstance(tec, list):
                     lines.append("**Tecnologías:** " + ", ".join(str(x) for x in tec))
             if item.get("enlace"):
-                lines.append(f"**Enlace:** {item['enlace']}")
+                link = str(item["enlace"]).strip()
+                lines.append(f"**Enlace:** <{_normalize_url(link)}>")
             lines.append("")
 
+    strengths = data.get("fortalezas") or []
+    if isinstance(strengths, list) and strengths:
+        lines.append("## Adicional")
+        for s in strengths:
+            if not isinstance(s, dict):
+                lines.append(f"- {_fmt_val(s)}")
+                continue
+            st = (s.get("titulo") or s.get("nombre") or "").strip()
+            sd = (s.get("descripcion") or "").strip()
+            if st and sd:
+                lines.append(f"- **{st}**: {sd}")
+            elif st:
+                lines.append(f"- **{st}**")
+            elif sd:
+                lines.append(f"- {sd}")
+        lines.append("")
+
     rec = data.get("recursos_actuales") or {}
-    if any(rec.values()):
+    # Mostrar solo si tiene cv_existente o texto_cv (links se muestran en contacto)
+    has_meta = any(rec.get(k) for k in ("cv_existente", "texto_cv"))
+    if has_meta:
         lines.append("## Recursos actuales")
-        lines.append(f"- **cv_existente:** {_fmt_val(rec.get('cv_existente'))}")
-        if rec.get("texto_cv"):
+        if rec.get("cv_existente"):
+            lines.append(f"- **cv_existente:** {_fmt_val(rec.get('cv_existente'))}")
+        if texto := rec.get("texto_cv"):
             lines.append("**Texto CV:**")
-            lines.append(str(rec["texto_cv"]))
-        links = _normalize_link_list(rec.get("links"))
-        if links:
-            lines.append("**Enlaces:**")
-            for link in links:
-                lines.append(f"- {link}")
+            lines.append(str(texto))
         lines.append("")
 
     rest = data.get("restricciones") or {}
@@ -801,12 +878,13 @@ def context_to_pdf_bytes(
     fallback_title: str = "",
 ) -> bytes:
     """
-    PDF estructurado inspirado en la vista previa (cabecera + dos columnas).
-    No depende de Markdown para evitar drift y saltos extraños.
+    PDF con plantilla Harvard de una sola columna, en negro, mismo orden
+    de secciones que la vista previa HTML/MD. Sin dependencias externas
+    más allá de fpdf2.
     """
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=14)
-    pdf.set_margins(14, 14, 14)
+    pdf.set_margins(18, 16, 18)
     pdf.add_page()
 
     font_path = _unicode_font_path()
@@ -818,17 +896,20 @@ def context_to_pdf_bytes(
         font = "Helvetica"
 
     page_left = pdf.l_margin
-    page_top = pdf.t_margin
     page_right = pdf.w - pdf.r_margin
     page_width = pdf.epw
+    black = (0, 0, 0)
 
-    title_sz = 22
-    subtitle_sz = 13
-    section_sz = 9
-    role_sz = 12
+    # Tamaños (mm) — equilibrados para A4
+    name_sz = 22
+    contact_sz = 10
+    section_sz = 10
+    role_sz = 11.5
+    title_sz = 10.5
     body_sz = 10
-    small_sz = 9
-    lh = 5.2
+    small_sz = 9.5
+    lh = 5.0
+    bullet_lh = 4.6
 
     def txt(v: Any) -> str:
         s = "" if v is None else str(v)
@@ -848,6 +929,7 @@ def context_to_pdf_bytes(
         size: float,
         *,
         align: str = "L",
+        line_height: float = lh,
     ) -> float:
         text = txt(text).strip()
         if not text:
@@ -857,259 +939,303 @@ def context_to_pdf_bytes(
         if XPos is not None and YPos is not None:
             pdf.multi_cell(
                 w,
-                lh,
+                line_height,
                 text,
                 align=align,
                 new_x=XPos.LEFT,
                 new_y=YPos.NEXT,
             )
         else:
-            pdf.multi_cell(w, lh, text, align=align)
+            pdf.multi_cell(w, line_height, text, align=align)
         return pdf.get_y()
 
-    def write_pills(x: float, y: float, w: float, items: list[str]) -> float:
-        cur_x = x
-        cur_y = y
-        pill_h = 6
-        pad_x = 1.8
-        gap_x = 1.4
-        gap_y = 1.4
-        set_font(8)
-        pdf.set_text_color(55, 65, 81)
-        pdf.set_draw_color(209, 213, 219)
-        pdf.set_fill_color(249, 250, 251)
-        for raw in items:
-            label = txt(raw).strip()
-            if not label:
-                continue
-            pill_w = pdf.get_string_width(label) + (pad_x * 2)
-            if cur_x + pill_w > x + w:
-                cur_x = x
-                cur_y += pill_h + gap_y
-            pdf.set_xy(cur_x, cur_y)
-            pdf.cell(pill_w, pill_h, label, border=1, ln=0, align="C", fill=True)
-            cur_x += pill_w + gap_x
-        pdf.set_text_color(17, 24, 39)
-        return cur_y + pill_h
-
     def section_title(x: float, y: float, w: float, title: str) -> float:
+        pdf.set_text_color(*black)
         set_font(section_sz, bold=True)
-        pdf.set_text_color(102, 112, 133)
         pdf.set_xy(x, y)
         t = txt(title).upper()
         if XPos is not None and YPos is not None:
-            pdf.multi_cell(w, lh - 1, t, new_x=XPos.LEFT, new_y=YPos.NEXT)
+            pdf.multi_cell(w, lh, t, new_x=XPos.LEFT, new_y=YPos.NEXT)
         else:
-            pdf.multi_cell(w, lh - 1, t)
-        y = pdf.get_y()
-        pdf.set_draw_color(229, 231, 235)
-        pdf.line(x, y + 0.6, x + w, y + 0.6)
-        pdf.set_text_color(17, 24, 39)
-        return y + 2.0
+            pdf.multi_cell(w, lh, t)
+        y_after = pdf.get_y()
+        pdf.set_draw_color(*black)
+        pdf.set_line_width(0.25)
+        pdf.line(x, y_after + 0.6, x + w, y_after + 0.6)
+        return y_after + 2.6
 
-    # Header
-    meta = data.get("meta") or {}
-    name = (meta.get("nombre_completo") or "").strip() or fallback_title.strip()
-    subtitle = (meta.get("titulo_profesional") or "").strip() or (
-        meta.get("objetivo_cv") or ""
-    ).strip()
-    contact = _contact_line(meta)
-
-    y = page_top
-    if name:
-        set_font(title_sz, bold=True)
-        pdf.set_text_color(17, 24, 39)
-        pdf.set_xy(page_left, y)
+    def entry_head(
+        x: float,
+        y: float,
+        w: float,
+        left_text: str,
+        right_text: str,
+        *,
+        left_bold: bool = False,
+    ) -> float:
+        """Cabecera de entrada: título a la izquierda, fecha a la derecha."""
+        pdf.set_text_color(*black)
+        if not right_text:
+            return write_block(
+                x, y, w, left_text,
+                title_sz if left_bold else body_sz,
+                line_height=lh,
+            )
+        right_w = max(35.0, w * 0.32)
+        left_w = w - right_w - 4
+        right_render = txt(right_text).strip()
+        if not right_render:
+            return write_block(
+                x, y, w, left_text,
+                title_sz if left_bold else body_sz,
+                line_height=lh,
+            )
+        # 1) Escribir primero la columna izquierda, partiendo de Y original.
+        left_y = write_block(
+            x, y, left_w, left_text,
+            title_sz if left_bold else body_sz,
+            line_height=lh,
+        )
+        # 2) Volver a Y original y escribir la columna derecha.
+        pdf.set_xy(x + left_w + 4, y)
+        set_font(small_sz)
         if XPos is not None and YPos is not None:
             pdf.multi_cell(
-                page_width,
-                8,
-                txt(name).upper(),
+                right_w,
+                lh,
+                right_render,
+                align="R",
                 new_x=XPos.LEFT,
                 new_y=YPos.NEXT,
             )
         else:
-            pdf.multi_cell(page_width, 8, txt(name).upper())
-        y = pdf.get_y()
-    if subtitle:
-        set_font(subtitle_sz, bold=False)
-        pdf.set_text_color(30, 90, 140)
-        y = write_block(page_left, y + 1, page_width, subtitle, subtitle_sz)
+            pdf.multi_cell(right_w, lh, right_render, align="R")
+        right_y = pdf.get_y()
+        return max(left_y, right_y)
+
+    def write_bullets(
+        x: float,
+        y: float,
+        w: float,
+        rows: list[str],
+        size: float = body_sz,
+    ) -> float:
+        cur_y = y
+        for row in rows:
+            s = txt(row).strip()
+            if not s:
+                continue
+            set_font(size)
+            pdf.set_text_color(*black)
+            pdf.set_xy(x, cur_y)
+            line = f"• {s}"
+            if XPos is not None and YPos is not None:
+                pdf.multi_cell(
+                    w, bullet_lh, line,
+                    new_x=XPos.LEFT, new_y=YPos.NEXT,
+                )
+            else:
+                pdf.multi_cell(w, bullet_lh, line)
+            cur_y = pdf.get_y()
+        return cur_y
+
+    # ─────────────────────── HEADER ───────────────────────
+    meta = data.get("meta") or {}
+    nombre = (meta.get("nombre_completo") or "").strip() or fallback_title.strip()
+    contact = _contact_line(meta, data)
+
+    pdf.set_text_color(*black)
+    y = pdf.t_margin
+    if nombre:
+        set_font(name_sz, bold=True)
+        pdf.set_xy(page_left, y)
+        nm = txt(nombre)
+        if XPos is not None and YPos is not None:
+            pdf.multi_cell(page_width, 9, nm, align="C",
+                           new_x=XPos.LEFT, new_y=YPos.NEXT)
+        else:
+            pdf.multi_cell(page_width, 9, nm, align="C")
+        y = pdf.get_y() + 1.5
+
     if contact:
-        set_font(small_sz)
-        pdf.set_text_color(75, 85, 99)
-        y += 1
+        set_font(contact_sz)
+        pdf.set_xy(page_left, y)
+        parts = []
         for label, val in contact:
-            line = f"{label.upper()}  {val}"
-            y = write_block(page_left, y, page_width, line, small_sz)
-    y += 2
-    pdf.set_draw_color(209, 213, 219)
+            parts.append(f"{label}: {val}" if label and label != "Portafolio" else str(val))
+        line = " | ".join(parts)
+        line = txt(line)
+        if XPos is not None and YPos is not None:
+            pdf.multi_cell(page_width, lh, line, align="C",
+                           new_x=XPos.LEFT, new_y=YPos.NEXT)
+        else:
+            pdf.multi_cell(page_width, lh, line, align="C")
+        y = pdf.get_y() + 2
+
+    # Línea bajo la cabecera
+    pdf.set_draw_color(*black)
+    pdf.set_line_width(0.4)
     pdf.line(page_left, y, page_right, y)
     y += 4
-    pdf.set_text_color(17, 24, 39)
 
-    # Column geometry
-    col_gap = 8
-    aside_w = max(52.0, page_width * 0.34)
-    main_w = page_width - aside_w - col_gap
-    aside_x = page_left
-    main_x = aside_x + aside_w + col_gap
-    aside_y = y
-    main_y = y
+    # ─────────────────────── PROFILE ───────────────────────
+    perfil = data.get("perfil_profesional") or {}
+    resumen = (perfil.get("resumen") or "").strip()
+    if resumen:
+        y = section_title(page_left, y, page_width, "Perfil Profesional")
+        y = write_block(page_left, y, page_width, resumen, body_sz, line_height=lh)
+        y += 2
 
-    # Aside content
-    certs = data.get("certificaciones") or []
-    if isinstance(certs, list) and certs:
-        aside_y = section_title(aside_x, aside_y, aside_w, "Certificaciones")
-        for c in certs:
-            if isinstance(c, dict):
-                name_c = (c.get("nombre") or c.get("titulo") or "").strip()
-                desc_c = (c.get("descripcion") or c.get("detalle") or "").strip()
-                if name_c:
-                    set_font(body_sz, bold=True)
-                    aside_y = write_block(aside_x, aside_y, aside_w, name_c, body_sz)
-                if desc_c:
-                    aside_y = write_block(aside_x, aside_y, aside_w, desc_c, small_sz)
-            else:
-                aside_y = write_block(aside_x, aside_y, aside_w, c, small_sz)
-            aside_y += 1
-        aside_y += 1
+    # ─────────────────────── EXPERIENCE ───────────────────────
+    exp = data.get("experiencia") or []
+    if isinstance(exp, list) and exp:
+        y = section_title(page_left, y, page_width, "Experiencia")
+        for item in exp:
+            if not isinstance(item, dict):
+                y = write_block(page_left, y, page_width, str(item), body_sz, line_height=lh)
+                continue
+            cargo = (item.get("cargo") or "").strip()
+            org = (item.get("empresa") or "").strip()
+            loc = (item.get("ubicacion") or "").strip()
+            drange = _exp_date_range(item)
+            title = ", ".join(x for x in (cargo, org) if x)
+            if title:
+                y = entry_head(page_left, y, page_width, title, drange, left_bold=True) + 0.5
+            elif drange:
+                y = write_block(page_left, y, page_width, drange, small_sz, line_height=lh)
+            for key in ("responsabilidades", "logros"):
+                val = item.get(key)
+                if not val:
+                    continue
+                rows = val if isinstance(val, list) else _lines(str(val))
+                if rows:
+                    y = write_bullets(page_left, y + 0.3, page_width, rows, body_sz)
+            if loc:
+                y = write_block(page_left, y, page_width, loc, small_sz, line_height=lh)
+            y += 2
 
-    strengths = data.get("fortalezas") or []
-    if isinstance(strengths, list) and strengths:
-        aside_y = section_title(aside_x, aside_y, aside_w, "Fortalezas")
-        for s in strengths:
-            if isinstance(s, dict):
-                st = (s.get("titulo") or s.get("nombre") or "").strip()
-                sd = (s.get("descripcion") or "").strip()
-                line = st if not sd else f"{st}: {sd}" if st else sd
-                if line:
-                    aside_y = write_block(aside_x, aside_y, aside_w, f"• {line}", small_sz)
-            else:
-                aside_y = write_block(aside_x, aside_y, aside_w, f"• {s}", small_sz)
-        aside_y += 2
-
+    # ─────────────────────── SKILLS ───────────────────────
     hab = data.get("habilidades") or {}
-    perfil_kw = (data.get("perfil_profesional") or {}).get("palabras_clave") or []
+    perfil_kw = (perfil.get("palabras_clave") or [])
     tech = _merge_tecnicas_lists(hab.get("tecnicas"), perfil_kw)
     soft = hab.get("blandas") or []
     langs = hab.get("idiomas") or []
     if tech or soft or langs:
-        aside_y = section_title(aside_x, aside_y, aside_w, "Habilidades")
+        y = section_title(page_left, y, page_width, "Habilidades")
         if tech:
-            set_font(small_sz, bold=True)
-            aside_y = write_block(aside_x, aside_y, aside_w, "Técnicas", small_sz)
-            aside_y = write_pills(aside_x, aside_y, aside_w, [str(t) for t in tech])
-            aside_y += 1
+            line = "Técnicas: " + ", ".join(str(x) for x in tech)
+            y = write_block(page_left, y, page_width, line, body_sz, line_height=lh) + 0.3
         if soft:
-            set_font(small_sz, bold=True)
-            aside_y = write_block(aside_x, aside_y, aside_w, "Blandas", small_sz)
-            for item in soft:
-                aside_y = write_block(aside_x, aside_y, aside_w, f"• {item}", small_sz)
-            aside_y += 1
+            line = "Habilidades Blandas: " + ", ".join(str(x) for x in soft)
+            y = write_block(page_left, y, page_width, line, body_sz, line_height=lh) + 0.3
         if langs:
-            set_font(small_sz, bold=True)
-            aside_y = write_block(aside_x, aside_y, aside_w, "Idiomas", small_sz)
-            for item in langs:
-                aside_y = write_block(aside_x, aside_y, aside_w, f"• {item}", small_sz)
-            aside_y += 1
+            line = "Idiomas: " + ", ".join(str(x) for x in langs)
+            y = write_block(page_left, y, page_width, line, body_sz, line_height=lh)
+        y += 2
 
-    # Main content
-    perfil = data.get("perfil_profesional") or {}
-    resumen = (perfil.get("resumen") or "").strip()
-    if resumen:
-        main_y = section_title(main_x, main_y, main_w, "Perfil profesional")
-        main_y = write_block(main_x, main_y, main_w, resumen, body_sz)
-        main_y += 2
-
-    exp = data.get("experiencia") or []
-    if isinstance(exp, list) and exp:
-        main_y = section_title(main_x, main_y, main_w, "Experiencia")
-        for item in exp:
-            if not isinstance(item, dict):
-                main_y = write_block(main_x, main_y, main_w, item, body_sz)
-                continue
-            cargo = (item.get("cargo") or "").strip()
-            org = (item.get("empresa") or "").strip()
-            drange = _exp_date_range(item)
-            loc = (item.get("ubicacion") or "").strip()
-            title_line = " · ".join(x for x in (cargo, org) if x)
-            if cargo:
-                set_font(role_sz, bold=True)
-                main_y = write_block(main_x, main_y, main_w, cargo, role_sz)
-            if org:
-                pdf.set_text_color(30, 90, 140)
-                main_y = write_block(main_x, main_y, main_w, org, body_sz)
-                pdf.set_text_color(17, 24, 39)
-            meta_line = " | ".join(x for x in (drange, loc) if x)
-            if meta_line:
-                pdf.set_text_color(107, 114, 128)
-                main_y = write_block(main_x, main_y, main_w, meta_line, small_sz)
-                pdf.set_text_color(17, 24, 39)
-            for label, key in (("Responsabilidades", "responsabilidades"), ("Logros", "logros")):
-                val = item.get(key)
-                if not val:
-                    continue
-                set_font(small_sz, bold=True)
-                main_y = write_block(main_x, main_y + 0.5, main_w, f"{label}:", small_sz)
-                if isinstance(val, list):
-                    for row in val:
-                        main_y = write_block(main_x, main_y, main_w, f"• {row}", small_sz)
-                else:
-                    main_y = write_block(main_x, main_y, main_w, str(val), small_sz)
-            main_y += 2
-
+    # ─────────────────────── EDUCATION & CERTIFICATIONS ───────────────────────
     edu = data.get("educacion") or []
-    if isinstance(edu, list) and edu:
-        main_y = section_title(main_x, main_y, main_w, "Educación")
-        for item in edu:
-            if not isinstance(item, dict):
-                main_y = write_block(main_x, main_y, main_w, item, body_sz)
-                continue
-            titulo = (item.get("titulo") or "").strip()
-            inst = (item.get("institucion") or "").strip()
-            loc = (item.get("ubicacion") or "").strip()
-            if titulo or inst:
-                set_font(role_sz, bold=True)
-                main_y = write_block(main_x, main_y, main_w, titulo, role_sz)
-            if inst:
-                pdf.set_text_color(30, 90, 140)
-                main_y = write_block(main_x, main_y, main_w, inst, body_sz)
-                pdf.set_text_color(17, 24, 39)
-            extra: list[str] = []
-            if item.get("fecha_inicio") or item.get("fecha_fin"):
-                extra.append(
-                    " – ".join(
-                        x for x in (item.get("fecha_inicio") or "", item.get("fecha_fin") or "") if x
+    certs = data.get("certificaciones") or []
+    has_edu = isinstance(edu, list) and bool(edu)
+    has_certs = isinstance(certs, list) and bool(certs)
+    if has_edu or has_certs:
+        y = section_title(page_left, y, page_width, "Educación y Certificaciones")
+        if has_edu:
+            for item in edu:
+                if not isinstance(item, dict):
+                    y = write_block(page_left, y, page_width, str(item), body_sz, line_height=lh)
+                    continue
+                titulo = (item.get("titulo") or "").strip()
+                inst = (item.get("institucion") or "").strip()
+                loc = (item.get("ubicacion") or "").strip()
+                left = " — ".join(x for x in (inst, titulo) if x)
+                # rango de fechas + estado
+                dr_parts: list[str] = []
+                if item.get("fecha_inicio") or item.get("fecha_fin"):
+                    fin_raw = item.get("fecha_fin") or "Present"
+                    dr_parts.append(
+                        " – ".join(
+                            _fmt_date_short(x)
+                            for x in (item.get("fecha_inicio") or "", fin_raw)
+                            if x
+                        )
                     )
-                )
-            if item.get("estado"):
-                extra.append(str(item.get("estado")))
-            meta_line = " | ".join(x for x in (*extra, loc) if x)
-            if meta_line:
-                pdf.set_text_color(107, 114, 128)
-                main_y = write_block(main_x, main_y, main_w, meta_line, small_sz)
-                pdf.set_text_color(17, 24, 39)
-            main_y += 1.5
+                if item.get("estado"):
+                    dr_parts.append(str(item["estado"]))
+                right = " · ".join(dr_parts)
+                if left:
+                    y = entry_head(page_left, y, page_width, left, right, left_bold=False) + 0.5
+                elif right:
+                    y = write_block(page_left, y, page_width, right, small_sz, line_height=lh)
+                if loc:
+                    y = write_block(page_left, y, page_width, loc, small_sz, line_height=lh)
+                y += 1.5
+        if has_certs:
+            for c in certs:
+                if not isinstance(c, dict):
+                    y = write_block(page_left, y, page_width, str(c), body_sz, line_height=lh)
+                    continue
+                name = (c.get("nombre") or c.get("titulo") or "").strip()
+                desc = (c.get("descripcion") or c.get("detalle") or "").strip()
+                left = f"{name} — {desc}" if name and desc else (name or desc)
+                if left:
+                    y = write_block(page_left, y, page_width, left, body_sz, line_height=lh) + 1
+        y += 1
 
+    # ─────────────────────── PROJECTS ───────────────────────
     proy = data.get("proyectos") or []
     if isinstance(proy, list) and proy:
-        main_y = section_title(main_x, main_y, main_w, "Proyectos")
+        y = section_title(page_left, y, page_width, "Proyectos")
         for item in proy:
             if not isinstance(item, dict):
-                main_y = write_block(main_x, main_y, main_w, item, body_sz)
+                y = write_block(page_left, y, page_width, str(item), body_sz, line_height=lh)
                 continue
-            name_p = (item.get("nombre") or "Proyecto").strip()
-            set_font(role_sz, bold=True)
-            main_y = write_block(main_x, main_y, main_w, name_p, role_sz)
-            if item.get("descripcion"):
-                main_y = write_block(main_x, main_y, main_w, str(item["descripcion"]), body_sz)
-            tec = item.get("tecnologias")
+            name = (item.get("nombre") or "").strip()
+            desc = (item.get("descripcion") or "").strip()
+            tec = item.get("tecnologias") or []
+            link = (item.get("enlace") or "").strip()
+            if name:
+                set_font(role_sz, bold=True)
+                pdf.set_text_color(*black)
+                y = write_block(page_left, y, page_width, name, role_sz, line_height=lh)
+            if desc:
+                y = write_block(page_left, y, page_width, desc, body_sz, line_height=lh)
             if isinstance(tec, list) and tec:
-                main_y = write_block(main_x, main_y, main_w, "Tecnologías: " + ", ".join(str(t) for t in tec), small_sz)
-            if item.get("enlace"):
-                main_y = write_block(main_x, main_y, main_w, "Enlace: " + str(item["enlace"]), small_sz)
-            main_y += 1.5
+                y = write_block(
+                    page_left, y, page_width,
+                    f"Tecnologías: {', '.join(str(t) for t in tec)}",
+                    small_sz, line_height=lh,
+                )
+            if link:
+                href = _normalize_url(link)
+                y = write_block(
+                    page_left, y, page_width,
+                    f"Enlace: {href}",
+                    small_sz, line_height=lh,
+                )
+            y += 2
+
+    # ─────────────────────── ADDITIONAL (fortalezas) ───────────────────────
+    strengths = data.get("fortalezas") or []
+    if isinstance(strengths, list) and strengths:
+        rows: list[str] = []
+        for s in strengths:
+            if not isinstance(s, dict):
+                v = (str(s) or "").strip()
+                if v:
+                    rows.append(v)
+                continue
+            st = (s.get("titulo") or s.get("nombre") or "").strip()
+            sd = (s.get("descripcion") or "").strip()
+            if st and sd:
+                rows.append(f"{st}: {sd}")
+            elif st:
+                rows.append(st)
+            elif sd:
+                rows.append(sd)
+        if rows:
+            y = section_title(page_left, y, page_width, "Adicional")
+            y = write_bullets(page_left, y, page_width, rows, body_sz)
 
     return bytes(pdf.output())
 

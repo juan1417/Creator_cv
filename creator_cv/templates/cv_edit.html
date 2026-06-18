@@ -1,55 +1,55 @@
 {% extends "base.html" %}
 {% block title %}{{ cv.title }} · Editor{% endblock %}
 {% block body %}
-  <p class="breadcrumb"><a href="{{ url_for('main.index') }}">Inicio</a> / Editor</p>
+  <div class="page-header">
+    <a class="page-header__back" href="{{ url_for('main.index') }}">
+      <svg class="page-header__back-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Volver al inicio
+    </a>
+    <p class="breadcrumb">
+      <a href="{{ url_for('main.index') }}">Inicio</a> /
+      <span aria-current="page">Editor</span>
+    </p>
+  </div>
   <h1>{{ cv.title or "Sin título" }}</h1>
 
-  <section class="card page-section" aria-labelledby="sec-intro">
-    <h2 id="sec-intro" class="h3">Qué es esta pantalla</h2>
-    <p class="lede page-section__lede">
-      Aquí vive el <strong>contexto estructurado</strong> de tu CV: un JSON que la app usa para vista previa y exportación.
-      Puedes rellenarlo a mano, con el <a href="{{ url_for('main.cv_chat', cv_id=cv.id) }}">chat IA (Gemini)</a>, el
-      <a href="{{ url_for('main.cv_interview', cv_id=cv.id) }}">asistente local</a> o la
-      <a href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">entrevista MCP</a>.
-      También puedes <a href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}">pegar una oferta</a> y ver compatibilidad y mejoras orientativas.
-      Lo que guardes se almacena en la base de datos de esta app.
-    </p>
-  </section>
-
   <section class="card page-section" aria-labelledby="sec-actions">
-    <h2 id="sec-actions" class="h3">Acciones y descargas</h2>
-    <p class="help page-section__help">
-      Entrevistas, sincronizar con el archivo que edita Cursor, vista previa y exportar.
-      Para <strong>comparar una vacante con tu CV</strong> usa el botón azul <strong>Compatibilidad con oferta</strong> (Gemini).
-    </p>
+    <p class="eyebrow">Herramientas</p>
+    <h2 id="sec-actions" class="h3">Acciones</h2>
+
     <div class="toolbar" role="group" aria-label="Acciones del CV">
-      <a class="btn btn-primary" href="{{ url_for('main.cv_chat', cv_id=cv.id) }}">Chat IA</a>
-      <a class="btn btn-primary" href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}" title="Pegar el texto de la oferta y ver requisitos vs tu CV">Compatibilidad con oferta</a>
-      <a class="btn btn-secondary" href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}">Entrevista MCP</a>
-      <a class="btn btn-secondary" href="{{ url_for('main.cv_review', cv_id=cv.id) }}">Revisión Markdown</a>
-      <a class="btn btn-secondary" href="{{ url_for('main.cv_interview', cv_id=cv.id) }}">Asistente local</a>
-      <form method="post" action="{{ url_for('main.cv_sync_from_mcp', cv_id=cv.id) }}" class="inline-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-        <button type="submit" class="btn btn-secondary">Importar desde archivo MCP</button>
-      </form>
-      <form method="post" action="{{ url_for('main.cv_sync_to_mcp', cv_id=cv.id) }}" class="inline-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-        <button type="submit" class="btn btn-secondary">Exportar al archivo MCP</button>
-      </form>
+      <details class="menu-details">
+        <summary class="btn btn-primary">Descargar</summary>
+        <div class="menu-items" role="menu">
+          <a href="{{ url_for('main.cv_export_md', cv_id=cv.id) }}" role="menuitem">Markdown (.md)</a>
+          <a href="{{ url_for('main.cv_export_pdf', cv_id=cv.id) }}" role="menuitem">PDF</a>
+          <a href="{{ url_for('main.cv_export_docx', cv_id=cv.id) }}" role="menuitem">Word (.docx)</a>
+        </div>
+      </details>
+
+      <details class="menu-details">
+        <summary class="btn btn-secondary">Rellenar</summary>
+        <div class="menu-items" role="menu">
+          <a href="{{ url_for('main.cv_interview', cv_id=cv.id) }}" role="menuitem">Asistente guiado</a>
+          <a href="{{ url_for('main.cv_chat', cv_id=cv.id) }}" role="menuitem">Chat con IA</a>
+          <a href="{{ url_for('main.cv_interview_mcp', cv_id=cv.id) }}" role="menuitem">Entrevista MCP</a>
+        </div>
+      </details>
+
       <a class="btn btn-secondary" href="{{ url_for('main.cv_preview', cv_id=cv.id) }}">Vista previa</a>
-      <div class="export-group" role="group" aria-label="Descargas">
-        <a class="btn btn-ghost" href="{{ url_for('main.cv_export_md', cv_id=cv.id) }}">Descargar .md</a>
-        <a class="btn btn-ghost" href="{{ url_for('main.cv_export_pdf', cv_id=cv.id) }}">Descargar PDF</a>
-        <a class="btn btn-ghost" href="{{ url_for('main.cv_export_docx', cv_id=cv.id) }}">Descargar DOCX</a>
-      </div>
+      <a class="btn btn-secondary" href="{{ url_for('main.cv_job_fit', cv_id=cv.id) }}">Comparar con oferta</a>
+
       <form method="post" action="{{ url_for('main.cv_delete', cv_id=cv.id) }}" class="inline-form toolbar-delete-form" onsubmit="return confirm('¿Eliminar este CV? No se puede deshacer.');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-        <button type="submit" class="btn btn-danger">Eliminar CV</button>
+        <button type="submit" class="btn btn-ghost btn-danger-text">Eliminar CV</button>
       </form>
     </div>
   </section>
 
   <section class="card form-stack page-section" aria-labelledby="sec-json">
+    <p class="eyebrow">Contexto</p>
     <h2 id="sec-json" class="h3">Editar el JSON del contexto</h2>
     <p class="help">
       Debe ser <strong>JSON válido</strong> y seguir el esquema del proyecto (<code>mcp-ia-preguntas</code>).
