@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
-import { apiGetCV, apiUpdateCV } from "../lib/api";
-import type { CV } from "../lib/supabase";
+import { apiGetCV, apiUpdateCV, type CV } from "../lib/api";
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>();

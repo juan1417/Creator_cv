@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { apiListCVs, apiCreateCV, apiDeleteCV } from "../lib/api";
-import type { CV } from "../lib/supabase";
+import { apiListCVs, apiCreateCV, apiDeleteCV, type CV } from "../lib/api";
 
 export function HomePage() {
   const [cvs, setCVs] = useState<CV[]>([]);

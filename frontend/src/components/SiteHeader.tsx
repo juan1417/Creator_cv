@@ -11,7 +11,7 @@ export function SiteHeader() {
           Creator CV
         </a>
         <div className="site-header__user">
-          <span className="site-header__email">{auth.user.email}</span>
+          <span className="site-header__email">{auth.email}</span>
           <button
             className="btn btn-ghost btn-compact"
             onClick={() => auth.signOut()}

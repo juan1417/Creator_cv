@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth-context";
 
 export function LoginPage() {
@@ -8,6 +7,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   if (auth.status === "authenticated") {
     window.location.href = "/";
@@ -17,13 +17,17 @@ export function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    const { error: err } = isRegister
-      ? await supabase.auth.signUp({ email, password })
-      : await supabase.auth.signInWithPassword({ email, password });
-
-    if (err) {
-      setError(err.message);
+    setSubmitting(true);
+    try {
+      if (isRegister) {
+        await auth.signUp(email, password);
+      } else {
+        await auth.signIn(email, password);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -65,8 +69,8 @@ export function LoginPage() {
           />
 
           <div className="form-actions">
-            <button type="submit" className="btn btn-primary">
-              {isRegister ? "Crear cuenta" : "Entrar"}
+            <button type="submit" className="btn btn-primary" disabled={submitting}>
+              {submitting ? "…" : isRegister ? "Crear cuenta" : "Entrar"}
             </button>
           </div>
         </form>

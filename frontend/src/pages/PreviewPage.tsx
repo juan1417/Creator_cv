@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
-import { apiGetCV } from "../lib/api";
+import { apiGetCV, type CV } from "../lib/api";
 import { CVRenderer } from "../components/CVRenderer";
-import type { CV } from "../lib/supabase";
 
 export function PreviewPage() {
   const { id } = useParams<{ id: string }>();

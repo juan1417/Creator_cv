@@ -1,4 +1,4 @@
-import type { CV } from "../lib/supabase";
+import type { CV } from "../lib/api";
 
 type CVData = Record<string, unknown>;
 
