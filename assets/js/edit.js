@@ -28,10 +28,10 @@
   const btnDelete = document.getElementById("btn-delete");
 
   // Set links
-  linkPreview.href = `/cvs/${encodeURIComponent(id)}/preview`;
-  linkJobfit.href = `/cvs/${encodeURIComponent(id)}/job-fit`;
-  linkInterview.href = `/cvs/${encodeURIComponent(id)}/interview`;
-  linkChat.href = `/cvs/${encodeURIComponent(id)}/chat`;
+  linkPreview.href = `/cv-preview.html?id=${encodeURIComponent(id)}`;
+  linkJobfit.href = `/cv-job-fit.html?id=${encodeURIComponent(id)}`;
+  linkInterview.href = `/cv-interview.html?id=${encodeURIComponent(id)}`;
+  linkChat.href = `/cv-chat.html?id=${encodeURIComponent(id)}`;
 
   function refreshTitle() {
     titleH1.textContent = cv.title || "Sin título";

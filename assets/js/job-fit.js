@@ -6,8 +6,8 @@
   const cv = CvStore.get(id);
   if (!cv) { Shared.flash("No se encontró el CV.", "error"); return; }
 
-  document.getElementById("back-link").href = `/cvs/${encodeURIComponent(id)}/edit`;
-  document.getElementById("bc-edit").href = `/cvs/${encodeURIComponent(id)}/edit`;
+  document.getElementById("back-link").href = `/cv-edit.html?id=${encodeURIComponent(id)}`;
+  document.getElementById("bc-edit").href = `/cv-edit.html?id=${encodeURIComponent(id)}`;
   document.title = `Compatibilidad · ${cv.title || "CV"}`;
 
   // Restore last job text

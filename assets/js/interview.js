@@ -6,15 +6,15 @@
   const cv = CvStore.get(id);
   if (!cv) { Shared.flash("No se encontró el CV en este navegador.", "error"); return; }
 
-  document.getElementById("back-link").href = `/cvs/${encodeURIComponent(id)}/edit`;
-  document.getElementById("bc-edit").href = `/cvs/${encodeURIComponent(id)}/edit`;
+  document.getElementById("back-link").href = `/cv-edit.html?id=${encodeURIComponent(id)}`;
+  document.getElementById("bc-edit").href = `/cv-edit.html?id=${encodeURIComponent(id)}`;
   document.title = `Asistente · ${cv.title || "CV"}`;
 
   const stepParam = Shared.getQueryParam("step") || InterviewFlow.first().id;
   const step = InterviewFlow.get(stepParam);
   if (!step) {
     Shared.flash("Paso no encontrado.", "error");
-    setTimeout(() => window.location.href = `/cvs/${encodeURIComponent(id)}/edit`, 1000);
+    setTimeout(() => window.location.href = `/cv-edit.html?id=${encodeURIComponent(id)}`, 1000);
     return;
   }
 
@@ -179,9 +179,9 @@
     Shared.flash("Guardado en localStorage", "success");
 
     if (action === "finish" || !nextStep) {
-      setTimeout(() => window.location.href = `/cvs/${encodeURIComponent(id)}/edit`, 400);
+      setTimeout(() => window.location.href = `/cv-edit.html?id=${encodeURIComponent(id)}`, 400);
     } else {
-      setTimeout(() => window.location.href = `/cvs/${encodeURIComponent(id)}/interview?step=${encodeURIComponent(nextStep.id)}`, 400);
+      setTimeout(() => window.location.href = `/cv-interview.html?id=${encodeURIComponent(id)}&step=${encodeURIComponent(nextStep.id)}`, 400);
     }
   });
 

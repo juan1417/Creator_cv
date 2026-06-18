@@ -17,8 +17,8 @@
   const back = document.getElementById("back-link");
   const bcEdit = document.getElementById("bc-edit");
 
-  back.href = `/cvs/${encodeURIComponent(id)}/edit`;
-  bcEdit.href = `/cvs/${encodeURIComponent(id)}/edit`;
+  back.href = `/cv-edit.html?id=${encodeURIComponent(id)}`;
+  bcEdit.href = `/cv-edit.html?id=${encodeURIComponent(id)}`;
   document.title = `Vista previa · ${cv.title || "CV"}`;
 
   const data = CvStore.parseContext(cv);
@@ -28,7 +28,7 @@
   if (isEmpty) {
     root.innerHTML = `
       <p class="cv-preview-empty">Ahora mismo no hay texto que mostrar: el contexto JSON está vacío o todos los campos van sin contenido.</p>
-      <p class="cv-preview-hint">Completá datos en el <a href="/cvs/${encodeURIComponent(id)}/edit">editor</a> y volvé a abrir la vista previa.</p>
+      <p class="cv-preview-hint">Completá datos en el <a href="/cv-edit.html?id=${encodeURIComponent(id)}">editor</a> y volvé a abrir la vista previa.</p>
     `;
   } else {
     root.innerHTML = html;

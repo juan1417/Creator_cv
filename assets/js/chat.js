@@ -7,10 +7,10 @@
   const cv = CvStore.get(id);
   if (!cv) { Shared.flash("No se encontró el CV en este navegador.", "error"); return; }
 
-  document.getElementById("back-link").href = `/cvs/${encodeURIComponent(id)}/edit`;
-  document.getElementById("bc-edit").href = `/cvs/${encodeURIComponent(id)}/edit`;
-  document.getElementById("link-edit").href = `/cvs/${encodeURIComponent(id)}/edit`;
-  document.getElementById("link-preview").href = `/cvs/${encodeURIComponent(id)}/preview`;
+  document.getElementById("back-link").href = `/cv-edit.html?id=${encodeURIComponent(id)}`;
+  document.getElementById("bc-edit").href = `/cv-edit.html?id=${encodeURIComponent(id)}`;
+  document.getElementById("link-edit").href = `/cv-edit.html?id=${encodeURIComponent(id)}`;
+  document.getElementById("link-preview").href = `/cv-preview.html?id=${encodeURIComponent(id)}`;
   document.title = `Chat IA · ${cv.title || "CV"}`;
 
   const log = document.getElementById("chat-log");
@@ -114,7 +114,7 @@
     const merged = _mergePatch(current, last.patch);
     CvStore.saveContext(id, merged);
     Shared.flash("Parche aplicado al CV.", "success");
-    setTimeout(() => window.location.href = `/cvs/${encodeURIComponent(id)}/edit#chat-log`, 400);
+    setTimeout(() => window.location.href = `/cv-edit.html?id=${encodeURIComponent(id)}#chat-log`, 400);
   });
 
   btnClear.addEventListener("click", () => {

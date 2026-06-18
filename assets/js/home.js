@@ -30,7 +30,7 @@
     for (const cv of cvs) {
       const li = document.createElement("li");
       li.innerHTML = `
-        <a href="/cvs/${encodeURIComponent(cv.id)}/edit">${Shared.escapeHtml(cv.title || "Sin título")}</a>
+        <a href="/cv-edit.html?id=${encodeURIComponent(cv.id)}">${Shared.escapeHtml(cv.title || "Sin título")}</a>
         <span class="meta-muted">actualizado ${Shared.formatDate(cv.updated_at)}</span>
         <button type="button" class="btn btn-danger btn-compact" data-action="delete" data-id="${cv.id}">Eliminar</button>
       `;
@@ -65,7 +65,9 @@
       Shared.flash(`CV "${cv.title}" creado`, "success");
       // Damos tiempo al flash a renderizarse antes de navegar
       setTimeout(() => {
-        window.location.href = `/cvs/${encodeURIComponent(cv.id)}/edit`;
+        // Usamos query string en vez de path: el path puede ser normalizado
+        // por Vercel/CDN y perder el id. ?id= siempre se preserva.
+        window.location.href = `/cv-edit.html?id=${encodeURIComponent(cv.id)}`;
       }, 50);
     } catch (err) {
       console.error("[home] error al crear CV:", err);
