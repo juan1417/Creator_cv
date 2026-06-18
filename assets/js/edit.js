@@ -1,7 +1,7 @@
 // Lógica de la página de edición: cargar el CV, editar, guardar, exportar.
 
 (function () {
-  const id = Shared.getQueryParam("id");
+  const id = Shared.getCvId();
   if (!id) {
     Shared.flash("Falta el id del CV en la URL. Volvé al inicio.", "error");
     setTimeout(() => window.location.href = "/", 1500);

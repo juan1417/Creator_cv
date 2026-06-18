@@ -1,7 +1,7 @@
 // Renderiza el paso actual del asistente y guarda los datos en el CV.
 
 (function () {
-  const id = Shared.getQueryParam("id");
+  const id = Shared.getCvId();
   if (!id) { Shared.flash("Falta el id del CV.", "error"); return; }
   const cv = CvStore.get(id);
   if (!cv) { Shared.flash("No se encontró el CV en este navegador.", "error"); return; }

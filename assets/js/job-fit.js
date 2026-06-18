@@ -1,7 +1,7 @@
 // Job fit (client-side): extrae términos de la oferta y los cruza con el CV.
 
 (function () {
-  const id = Shared.getQueryParam("id");
+  const id = Shared.getCvId();
   if (!id) { Shared.flash("Falta el id del CV.", "error"); return; }
   const cv = CvStore.get(id);
   if (!cv) { Shared.flash("No se encontró el CV.", "error"); return; }

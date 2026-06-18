@@ -1,7 +1,7 @@
 // Lógica de la vista previa: render del CV en HTML (plantilla Harvard) + MD.
 
 (function () {
-  const id = Shared.getQueryParam("id");
+  const id = Shared.getCvId();
   if (!id) {
     Shared.flash("Falta el id del CV.", "error");
     return;

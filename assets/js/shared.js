@@ -51,6 +51,26 @@ function getQueryParam(name) {
   return u.searchParams.get(name);
 }
 
+// Devuelve el id del CV a partir del path. Soporta:
+//   /cvs/<id>/edit
+//   /cvs/<id>/preview
+//   /cvs/<id>/interview
+//   /cvs/<id>/chat
+//   /cvs/<id>/job-fit
+// (Necesario porque Vercel rewrite pasa la URL con el id en el path,
+// no en query string.)
+function getCvIdFromPath() {
+  const m = window.location.pathname.match(
+    /^\/cvs\/([^/]+)(?:\/(?:edit|preview|interview|chat|job-fit))?\/?$/
+  );
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+// Devuelve el id del CV. Primero busca en query (?id=), después en path.
+function getCvId() {
+  return getQueryParam("id") || getCvIdFromPath();
+}
+
 function sanitizeFilename(s) {
   return (s || "cv")
     .replace(/[^\w\sÀ-ſ.-]+/g, "")
@@ -59,4 +79,4 @@ function sanitizeFilename(s) {
     .slice(0, 60) || "cv";
 }
 
-window.Shared = { flash, escapeHtml, formatDate, downloadBlob, downloadText, getQueryParam, sanitizeFilename };
+window.Shared = { flash, escapeHtml, formatDate, downloadBlob, downloadText, getQueryParam, getCvIdFromPath, getCvId, sanitizeFilename };
