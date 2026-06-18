@@ -52,11 +52,25 @@
 
   formNew.addEventListener("submit", (e) => {
     e.preventDefault();
-    const title = inputTitle.value.trim();
-    const cv = CvStore.create({ title });
-    inputTitle.value = "";
-    Shared.flash(`CV "${cv.title}" creado`, "success");
-    window.location.href = `/cvs/${encodeURIComponent(cv.id)}/edit`;
+    try {
+      const title = inputTitle.value.trim();
+      console.log("[home] creando CV con título:", title);
+      if (!Storage.isAvailable()) {
+        Shared.flash("Tu navegador bloqueó localStorage. Habilitá cookies/storage y recargá.", "error");
+        return;
+      }
+      const cv = CvStore.create({ title });
+      console.log("[home] CV creado:", cv.id, cv.title);
+      inputTitle.value = "";
+      Shared.flash(`CV "${cv.title}" creado`, "success");
+      // Damos tiempo al flash a renderizarse antes de navegar
+      setTimeout(() => {
+        window.location.href = `/cvs/${encodeURIComponent(cv.id)}/edit`;
+      }, 50);
+    } catch (err) {
+      console.error("[home] error al crear CV:", err);
+      Shared.flash("Error al crear el CV: " + (err.message || err), "error");
+    }
   });
 
   btnExport.addEventListener("click", () => {
