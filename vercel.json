@@ -1,11 +1,9 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
-    }
-  ],
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": null,
+  "installCommand": null,
+  "outputDirectory": null,
   "rewrites": [
     { "source": "/cvs/:id/edit", "destination": "/cv-edit.html" },
     { "source": "/cvs/:id/preview", "destination": "/cv-preview.html" },

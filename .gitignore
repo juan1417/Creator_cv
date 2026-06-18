@@ -40,3 +40,4 @@ tmp_server.out
 # OS / editor
 .DS_Store
 Thumbs.db
+.vercel

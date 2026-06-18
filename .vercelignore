@@ -1,0 +1,51 @@
+# Todo lo que no es la versión estática nueva.
+# Sin esto, Vercel detecta pyproject.toml/.python-version y corre el Flask.
+
+# Backend Flask (NO deployar)
+creator_cv/
+mcp-ia-preguntas/
+migrations/
+instance/
+scripts/
+
+# Configuración Python/uv
+pyproject.toml
+uv.lock
+.python-version
+requirements*.txt
+Pipfile*
+poetry.lock
+
+# Datos locales con info personal
+export-cvs.json
+
+# Entorno / logs
+.env
+.env.*
+*.log
+tmp_server.*
+
+# Carpetas de herramientas locales
+.atl/
+.opencode/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.db
+
+# Tests y dev
+tests/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Git / editor
+.git/
+.gitignore
+.gitattributes
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+AGENTS.md
