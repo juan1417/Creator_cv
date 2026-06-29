@@ -1,10 +1,23 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./lib/auth-context";
+import { Sidebar } from "./components/Sidebar";
+import { Topbar } from "./components/Topbar";
 import { LoginPage } from "./pages/LoginPage";
 import { HomePage } from "./pages/HomePage";
 import { EditorPage } from "./pages/EditorPage";
 import { PreviewPage } from "./pages/PreviewPage";
-import { SiteHeader } from "./components/SiteHeader";
+import { VerifyEmailPage } from "./pages/VerifyEmailPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
+import { TwoFactorVerifyPage } from "./pages/TwoFactorVerifyPage";
+import { AccountPage } from "./pages/AccountPage";
+import { TwoFactorSetupPage } from "./pages/TwoFactorSetupPage";
+import { TwoFactorDisablePage } from "./pages/TwoFactorDisablePage";
+import { BackupCodesPage } from "./pages/BackupCodesPage";
+import { ComparatorPage } from "./pages/ComparatorPage";
+import { AssistantPage } from "./pages/AssistantPage";
+import { TemplatesPage } from "./pages/TemplatesPage";
+import { HistoryPage } from "./pages/HistoryPage";
 
 export function App() {
   const auth = useAuth();
@@ -17,7 +30,8 @@ export function App() {
           alignItems: "center",
           justifyContent: "center",
           height: "100vh",
-          color: "#9a9a9a",
+          background: "var(--bg)",
+          color: "var(--muted)",
         }}
       >
         Cargando…
@@ -29,6 +43,10 @@ export function App() {
     return (
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/two-factor" element={<TwoFactorVerifyPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -36,13 +54,24 @@ export function App() {
 
   return (
     <>
-      <SiteHeader />
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/cv/:id" element={<EditorPage />} />
-        <Route path="/cv/:id/preview" element={<PreviewPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Sidebar />
+      <div className="main">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/cvs" element={<HomePage />} />
+          <Route path="/comparator" element={<ComparatorPage />} />
+          <Route path="/assistant" element={<AssistantPage />} />
+          <Route path="/templates" element={<TemplatesPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/cv/:id" element={<EditorPage />} />
+          <Route path="/cv/:id/preview" element={<PreviewPage />} />
+          <Route path="/account" element={<AccountPage />} />
+          <Route path="/account/2fa/setup" element={<TwoFactorSetupPage />} />
+          <Route path="/account/2fa/disable" element={<TwoFactorDisablePage />} />
+          <Route path="/account/2fa/backup-codes" element={<BackupCodesPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
     </>
   );
 }

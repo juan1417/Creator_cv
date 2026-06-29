@@ -4,14 +4,23 @@ from functools import wraps
 from typing import Any, Callable
 
 from flask import Blueprint, Flask, g, jsonify, request
-from sqlalchemy import select
 
 from ...application.dto import (
     ChatMessageRequest,
     CreateCVRequest,
+    ForgotPasswordRequest,
     LoginRequest,
+    LogoutRequest,
+    RefreshRequest,
     RegisterRequest,
+    RegenerateBackupCodesRequest,
+    ResetPasswordRequest,
+    ResendVerificationRequest,
+    TwoFactorDisableRequest,
+    TwoFactorSetupConfirmRequest,
+    TwoFactorVerifyRequest,
     UpdateCVRequest,
+    VerifyEmailRequest,
 )
 from ...application.inputs import (
     CreateCVInput,
@@ -25,19 +34,52 @@ from ...application.use_cases import (
     ClearChat,
     CreateCV,
     DeleteCV,
+    DisableTotp,
+    DuplicateCV,
+    ForgotPassword,
     GetCV,
     GetChat,
     ListCVs,
+    LoginPending,
+    LoginUser,
+    Logout,
+    RefreshSession,
+    RegenerateBackupCodes,
+    RegisterUser,
+    ResendVerification,
+    ResetPassword,
+    SetupTotpConfirm,
+    SetupTotpStart,
     UpdateCV,
+    VerifyEmail,
+    VerifyTwoFactor,
 )
 from ...domain.exceptions import UnauthorizedError
-from ..auth.local_auth import (
-    create_token,
-    decode_token,
-    hash_password,
-    verify_password,
-)
-from ..persistence.models import UserModel
+from ..auth.local_auth import decode_token
+from .limiter import get_email_key, get_login_key, limiter
+
+
+def _session_payload(session) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "access_token": session.access_token,
+        "refresh_token": session.refresh_token,
+        "user_id": session.user_id,
+        "email": session.email,
+    }
+
+
+def _login_outcome_payload(outcome) -> dict[str, Any]:
+    """Serializa AuthSession (normal) o LoginPending (2FA)."""
+    if isinstance(outcome, LoginPending):
+        return {
+            "ok": True,
+            "requires_2fa": True,
+            "pending_token": outcome.pending_token,
+            "user_id": outcome.user_id,
+            "email": outcome.email,
+        }
+    return _session_payload(outcome)
 
 
 def make_require_auth(auth_verifier: Callable[[str], str]) -> Callable:
@@ -59,16 +101,33 @@ def make_require_auth(auth_verifier: Callable[[str], str]) -> Callable:
 def register_routes(
     app: Flask,
     *,
+    # CV / chat
     create_cv: CreateCV,
     get_cv: GetCV,
     list_cvs: ListCVs,
     update_cv: UpdateCV,
     delete_cv: DeleteCV,
+    duplicate_cv: DuplicateCV,
     get_chat: GetChat,
     append_chat: AppendChat,
     clear_chat: ClearChat,
+    # Auth
+    register_user: RegisterUser,
+    login_user: LoginUser,
+    verify_email_uc: VerifyEmail,
+    resend_verification_uc: ResendVerification,
+    forgot_password_uc: ForgotPassword,
+    reset_password_uc: ResetPassword,
+    refresh_session_uc: RefreshSession,
+    logout_uc: Logout,
+    # 2FA
+    verify_two_factor_uc: VerifyTwoFactor,
+    setup_totp_start_uc: SetupTotpStart,
+    setup_totp_confirm_uc: SetupTotpConfirm,
+    disable_totp_uc: DisableTotp,
+    regenerate_backup_codes_uc: RegenerateBackupCodes,
+    # Misc
     auth_verifier: Callable[[str], str],
-    get_session_factory: Callable,
 ) -> None:
     require_auth = make_require_auth(auth_verifier)
 
@@ -79,42 +138,153 @@ def register_routes(
     def health():
         return jsonify({"ok": True, "service": "creator-cv-backend"}), 200
 
-    # ── Auth ──────────────────────────────────────────────────────────
+    # ── Auth: registro y login ────────────────────────────────────────
+
     @api.post("/auth/register")
+    @limiter.limit("5 per hour")
     def register():
         body = RegisterRequest.model_validate(request.get_json(silent=True) or {})
-        with get_session_factory() as session:
-            existing = session.scalar(
-                select(UserModel).where(UserModel.email == body.email)
+        result = register_user.execute(
+            email=str(body.email),
+            password=body.password,
+            password_hasher=_password_hasher,
+        )
+        payload: dict[str, Any] = {
+            "ok": True,
+            "user_id": result.user_id,
+            "email": result.email,
+            "requires_verification": result.requires_verification,
+        }
+        if not result.requires_verification:
+            from ...application.use_cases import _issue_auth_session
+            user = _find_user(result.user_id)
+            session, _ = _issue_auth_session(
+                user, _refresh_repo_instance, _token_creator
             )
-            if existing:
-                return jsonify({"ok": False, "error": "El email ya está registrado"}), 409
-            user = UserModel(
-                email=body.email,
-                password_hash=hash_password(body.password),
-            )
-            session.add(user)
-            session.flush()
-            token = create_token(user.id, user.email)
-            return jsonify({"ok": True, "token": token, "user_id": user.id, "email": user.email}), 201
+            payload.update({
+                "access_token": session.access_token,
+                "refresh_token": session.refresh_token,
+            })
+        return jsonify(payload), 201
 
     @api.post("/auth/login")
+    @limiter.limit("10 per 15 minutes", key_func=get_login_key)
     def login():
         body = LoginRequest.model_validate(request.get_json(silent=True) or {})
-        with get_session_factory() as session:
-            user = session.scalar(
-                select(UserModel).where(UserModel.email == body.email)
-            )
-            if not user or not verify_password(body.password, user.password_hash):
-                return jsonify({"ok": False, "error": "Email o contraseña incorrectos"}), 401
-            token = create_token(user.id, user.email)
-            return jsonify({"ok": True, "token": token, "user_id": user.id, "email": user.email}), 200
+        outcome = login_user.execute(email=str(body.email), password=body.password)
+        return jsonify(_login_outcome_payload(outcome)), 200
+
+    # ── Auth: refresh tokens ──────────────────────────────────────────
+
+    @api.post("/auth/refresh")
+    @limiter.limit("60 per hour")
+    def refresh_route():
+        body = RefreshRequest.model_validate(request.get_json(silent=True) or {})
+        session = refresh_session_uc.execute(body.refresh_token)
+        return jsonify(_session_payload(session)), 200
+
+    # ── Auth: verificación de email ───────────────────────────────────
+
+    @api.post("/auth/verify-email")
+    def verify_email_route():
+        body = VerifyEmailRequest.model_validate(request.get_json(silent=True) or {})
+        outcome = verify_email_uc.execute(body.token)
+        return jsonify(_login_outcome_payload(outcome)), 200
+
+    @api.post("/auth/resend-verification")
+    @limiter.limit("3 per hour", key_func=get_email_key)
+    def resend_verification_route():
+        body = ResendVerificationRequest.model_validate(request.get_json(silent=True) or {})
+        resend_verification_uc.execute(str(body.email))
+        return jsonify({"ok": True}), 200
+
+    # ── Auth: reset de contraseña ─────────────────────────────────────
+
+    @api.post("/auth/forgot-password")
+    @limiter.limit("3 per hour")
+    def forgot_password_route():
+        body = ForgotPasswordRequest.model_validate(request.get_json(silent=True) or {})
+        forgot_password_uc.execute(str(body.email))
+        return jsonify({"ok": True}), 200
+
+    @api.post("/auth/reset-password")
+    @limiter.limit("5 per hour")
+    def reset_password_route():
+        body = ResetPasswordRequest.model_validate(request.get_json(silent=True) or {})
+        reset_password_uc.execute(body.token, body.new_password)
+        return jsonify({"ok": True}), 200
+
+    # ── Auth: sesión actual / logout ──────────────────────────────────
 
     @api.get("/auth/me")
     @require_auth
     def me():
         payload = decode_token(request.headers.get("Authorization", ""))
         return jsonify({"ok": True, "user_id": g.user_id, "email": payload.get("email")}), 200
+
+    @api.post("/auth/logout")
+    @require_auth
+    def logout_route():
+        body = LogoutRequest.model_validate(request.get_json(silent=True) or {})
+        logout_uc.execute(body.refresh_token)
+        return jsonify({"ok": True}), 200
+
+    # ── 2FA / TOTP ─────────────────────────────────────────────────────
+
+    @api.post("/auth/2fa/verify")
+    @limiter.limit("10 per 15 minutes", key_func=get_login_key)
+    def verify_two_factor_route():
+        """Segundo paso del login: pending_token + code → sesión."""
+        body = TwoFactorVerifyRequest.model_validate(request.get_json(silent=True) or {})
+        session = verify_two_factor_uc.execute(body.pending_token, body.code)
+        return jsonify(_session_payload(session)), 200
+
+    @api.post("/auth/2fa/setup")
+    @require_auth
+    @limiter.limit("10 per hour")
+    def setup_totp_start_route():
+        """Inicia setup: genera secret + QR. NO habilita 2FA todavía."""
+        result = setup_totp_start_uc.execute(g.user_id)
+        return jsonify({
+            "ok": True,
+            "qr_data_url": result.qr_data_url,
+            "manual_key": result.manual_key,
+            "otpauth_uri": result.otpauth_uri,
+        }), 200
+
+    @api.post("/auth/2fa/verify-setup")
+    @require_auth
+    @limiter.limit("10 per hour")
+    def setup_totp_confirm_route():
+        """Confirma setup con un code del authenticator. Habilita 2FA + emite backup codes."""
+        body = TwoFactorSetupConfirmRequest.model_validate(
+            request.get_json(silent=True) or {}
+        )
+        result = setup_totp_confirm_uc.execute(g.user_id, body.code)
+        return jsonify({
+            "ok": True,
+            "backup_codes": result.backup_codes,
+        }), 200
+
+    @api.post("/auth/2fa/disable")
+    @require_auth
+    @limiter.limit("5 per hour")
+    def disable_totp_route():
+        body = TwoFactorDisableRequest.model_validate(
+            request.get_json(silent=True) or {}
+        )
+        disable_totp_uc.execute(g.user_id, body.password, body.code)
+        return jsonify({"ok": True}), 200
+
+    @api.post("/auth/2fa/backup-codes")
+    @require_auth
+    @limiter.limit("3 per hour")
+    def regenerate_backup_codes_route():
+        body = RegenerateBackupCodesRequest.model_validate(
+            request.get_json(silent=True) or {}
+        )
+        codes = regenerate_backup_codes_uc.execute(g.user_id, body.password)
+        return jsonify({"ok": True, "backup_codes": codes}), 200
 
     # ── CVs ───────────────────────────────────────────────────────────
     @api.get("/cvs")
@@ -139,8 +309,7 @@ def register_routes(
         result = get_cv.execute(g.user_id, GetCVInput(cv_id=cv_id))
         return jsonify({"ok": True, "cv": result.model_dump(mode="json")}), 200
 
-    @api.put("/cvs/<cv_id>")
-    @api.patch("/cvs/<cv_id>")
+    @api.route("/cvs/<cv_id>", methods=["PUT", "PATCH"])
     @require_auth
     def update_cv_route(cv_id: str):
         body = UpdateCVRequest.model_validate(request.get_json(silent=True) or {})
@@ -155,6 +324,13 @@ def register_routes(
     def delete_cv_route(cv_id: str):
         delete_cv.execute(g.user_id, DeleteCVInput(cv_id=cv_id))
         return jsonify({"ok": True}), 200
+
+    @api.post("/cvs/<cv_id>/duplicate")
+    @require_auth
+    def duplicate_cv_route(cv_id: str):
+        """Crea una copia del CV con título ``"(Copia)"``. Mismo ``context_json``."""
+        new_cv = duplicate_cv.execute(g.user_id, cv_id)
+        return jsonify({"ok": True, "cv": new_cv.model_dump(mode="json")}), 201
 
     # ── Chat ──────────────────────────────────────────────────────────
     @api.get("/cvs/<cv_id>/chat")
@@ -200,3 +376,28 @@ def register_routes(
         return jsonify({"ok": True}), 200
 
     app.register_blueprint(api)
+
+
+# Callbacks inyectados en runtime desde app_factory.
+_password_hasher: Callable[[str], str] = lambda p: p
+_token_creator: Callable[[str, str], str] = lambda uid, em: ""
+_refresh_repo_instance: Any = None
+_user_repo_instance: Any = None
+
+
+def _find_user(user_id: str):
+    return _user_repo_instance.get_by_id(user_id)
+
+
+def set_auth_callbacks(
+    *,
+    password_hasher: Callable[[str], str],
+    token_creator: Callable[[str, str], str],
+    user_repo: Any,
+    refresh_repo: Any,
+) -> None:
+    global _password_hasher, _token_creator, _user_repo_instance, _refresh_repo_instance
+    _password_hasher = password_hasher
+    _token_creator = token_creator
+    _user_repo_instance = user_repo
+    _refresh_repo_instance = refresh_repo

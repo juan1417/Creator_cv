@@ -8,7 +8,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+
+# ── CV ────────────────────────────────────────────────────────────────────
 
 
 class CreateCVRequest(BaseModel):
@@ -50,6 +53,9 @@ class CVResponse(BaseModel):
     updated_at: datetime
 
 
+# ── Chat ──────────────────────────────────────────────────────────────────
+
+
 class ChatMessageRequest(BaseModel):
     role: str  # "user" | "assistant"
     content: str = Field(min_length=1)
@@ -70,11 +76,73 @@ class ChatMessageResponse(BaseModel):
     created_at: datetime
 
 
+# ── Auth ──────────────────────────────────────────────────────────────────
+
+
 class RegisterRequest(BaseModel):
-    email: str = Field(min_length=1, max_length=255)
+    email: EmailStr = Field(max_length=255)
     password: str = Field(min_length=6, max_length=255)
 
 
 class LoginRequest(BaseModel):
-    email: str = Field(min_length=1, max_length=255)
+    email: EmailStr = Field(max_length=255)
     password: str = Field(min_length=1, max_length=255)
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=10, max_length=128)
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr = Field(max_length=255)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr = Field(max_length=255)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=10, max_length=128)
+    new_password: str = Field(min_length=6, max_length=255)
+
+
+class RefreshRequest(BaseModel):
+    """Body de POST /api/auth/refresh."""
+
+    refresh_token: str = Field(min_length=10, max_length=128)
+
+
+class LogoutRequest(BaseModel):
+    """Body de POST /api/auth/logout.
+
+    El access_token sigue viajando en el header Authorization (para identificar
+    al user). El refresh_token en el body se revoca.
+    """
+
+    refresh_token: str = Field(min_length=10, max_length=128)
+
+
+class TwoFactorVerifyRequest(BaseModel):
+    """Body de POST /api/auth/2fa/verify (segundo paso del login)."""
+
+    pending_token: str = Field(min_length=10, max_length=128)
+    code: str = Field(min_length=4, max_length=20)
+
+
+class TwoFactorSetupConfirmRequest(BaseModel):
+    """Body de POST /api/auth/2fa/verify-setup."""
+
+    code: str = Field(min_length=6, max_length=20)
+
+
+class TwoFactorDisableRequest(BaseModel):
+    """Body de POST /api/auth/2fa/disable."""
+
+    password: str = Field(min_length=6, max_length=255)
+    code: str = Field(min_length=4, max_length=20)
+
+
+class RegenerateBackupCodesRequest(BaseModel):
+    """Body de POST /api/auth/2fa/backup-codes."""
+
+    password: str = Field(min_length=6, max_length=255)

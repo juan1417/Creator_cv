@@ -1,1 +1,1 @@
-"""Creator CV Backend - Clean Architecture (Flask + Supabase)."""
+"""Creator CV Backend - Clean Architecture (Flask + SQLAlchemy + Postgres/Neon)."""

@@ -1,16 +1,24 @@
 [project]
 name = "creator-cv-backend"
-version = "2.0.0"
-description = "Creator CV backend (Flask + Clean Architecture + SQLAlchemy)"
+version = "2.3.0"
+description = "Creator CV backend (Flask + Clean Architecture + SQLAlchemy + Neon/Postgres)"
 requires-python = ">=3.12"
 dependencies = [
     "flask>=3.0.0",
     "flask-cors>=4.0.0",
+    "flask-limiter>=3.5",
+    "limits>=3.13",
     "sqlalchemy>=2.0.0",
+    "psycopg[binary]>=3.1",
+    "psycopg2-binary>=2.9",
+    "alembic>=1.13",
     "pyjwt>=2.8.0",
-    "pydantic>=2.0.0",
+    "pydantic[email]>=2.0.0",
     "python-dotenv>=1.0.0",
     "gunicorn>=21.2.0",
+    "pyotp>=2.9.0",
+    "qrcode[pil]>=7.4.0",
+    "cryptography>=42.0.0",
 ]
 
 [dependency-groups]
@@ -27,5 +35,5 @@ target-version = "py312"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["."]
 asyncio_mode = "auto"

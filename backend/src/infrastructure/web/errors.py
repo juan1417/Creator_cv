@@ -6,12 +6,18 @@ códigos HTTP correctos, sin que el dominio sepa de HTTP.
 from __future__ import annotations
 
 from flask import Flask, jsonify
+from flask_limiter.errors import RateLimitExceeded
 
 from ...domain.exceptions import (
     CVNotFoundError,
     ChatNotFoundError,
     DomainError,
+    EmailNotVerifiedError,
+    InvalidCredentialsError,
+    InvalidTokenError,
+    TokenExpiredError,
     UnauthorizedError,
+    UserAlreadyExistsError,
     ValidationError,
 )
 
@@ -25,6 +31,26 @@ def register_error_handlers(app: Flask) -> None:
     def _on_validation(e: ValidationError):
         return _err(str(e), 400)
 
+    @app.errorhandler(InvalidCredentialsError)
+    def _on_invalid_creds(_e: InvalidCredentialsError):
+        return _err("Email o contraseña incorrectos", 401)
+
+    @app.errorhandler(EmailNotVerifiedError)
+    def _on_email_not_verified(_e: EmailNotVerifiedError):
+        return _err(str(_e), 403)
+
+    @app.errorhandler(InvalidTokenError)
+    def _on_invalid_token(_e: InvalidTokenError):
+        return _err(str(_e), 400)
+
+    @app.errorhandler(TokenExpiredError)
+    def _on_token_expired(_e: TokenExpiredError):
+        return _err(str(_e), 400)
+
+    @app.errorhandler(UserAlreadyExistsError)
+    def _on_user_exists(_e: UserAlreadyExistsError):
+        return _err("El email ya está registrado", 409)
+
     @app.errorhandler(UnauthorizedError)
     def _on_unauth(e: UnauthorizedError):
         return _err(str(e), 401)
@@ -36,6 +62,10 @@ def register_error_handlers(app: Flask) -> None:
     @app.errorhandler(ChatNotFoundError)
     def _on_chat_not_found(e: ChatNotFoundError):
         return _err(str(e), 404)
+
+    @app.errorhandler(RateLimitExceeded)
+    def _on_rate_limit(e: RateLimitExceeded):
+        return _err("Demasiados intentos. Probá más tarde.", 429)
 
     @app.errorhandler(DomainError)
     def _on_domain(e: DomainError):
