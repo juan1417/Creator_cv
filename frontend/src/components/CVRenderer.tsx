@@ -37,11 +37,12 @@ export function CVRenderer({ cv, settings, mini = false }: CVRendererProps) {
   }
 
   const vs = settings?.visibleSections;
+  const tpl = settings?.template || "minimal";
 
   return (
-    <div className="cv-paper" style={style}>
+    <div className={`cv-paper cv-paper--${tpl}`} style={style}>
       <div className="cv-ref">
-        <CVBody data={data} visibleSections={vs} />
+        <CVBody data={data} visibleSections={vs} template={tpl} />
       </div>
     </div>
   );
@@ -79,7 +80,7 @@ function Thumbnail({ data }: { data: CVContext }) {
   );
 }
 
-function CVBody({ data, visibleSections }: { data: CVContext; visibleSections?: Record<string, boolean> }) {
+function CVBody({ data, visibleSections, template }: { data: CVContext; visibleSections?: Record<string, boolean>; template?: string }) {
   const m = data.meta;
   const nombre = m.nombre_completo.trim();
   const tituloProf = m.titulo_profesional.trim();
@@ -87,15 +88,20 @@ function CVBody({ data, visibleSections }: { data: CVContext; visibleSections?: 
 
   const resumen = m.objetivo_cv.trim();
   const show = (key: string) => !visibleSections || visibleSections[key] !== false;
+  const isModern = template === "modern";
+  const isExecutive = template === "executive";
+  const isCreative = template === "creative";
+  const isAcademic = template === "academic";
+  const isMinimal = template === "minimal" || template === "blank";
 
   return (
     <>
       {/* Header */}
       {(nombre || tituloProf || contactLine.length > 0) && (
-        <header className="cv-ref__header">
-          {nombre && <h1 className="cv-ref__name">{nombre}</h1>}
+        <header className={`cv-ref__header ${isExecutive ? "cv-ref__header--executive" : ""} ${isCreative ? "cv-ref__header--creative" : ""}`}>
+          {nombre && <h1 className={`cv-ref__name ${isExecutive ? "cv-ref__name--executive" : ""}`}>{nombre}</h1>}
           {tituloProf && (
-            <p className="cv-ref__role">{tituloProf}</p>
+            <p className={`cv-ref__role ${isCreative ? "cv-ref__role--creative" : ""}`}>{tituloProf}</p>
           )}
           {contactLine.length > 0 && (
             <div className="cv-ref__contact-line">
@@ -113,125 +119,161 @@ function CVBody({ data, visibleSections }: { data: CVContext; visibleSections?: 
         </header>
       )}
 
-      {/* Perfil Profesional */}
-      {show("summary") && resumen && (
-        <Section title="Perfil Profesional">
-          <p className="cv-ref__para">{resumen}</p>
-        </Section>
-      )}
-
-      {/* Experiencia */}
-      {show("experience") && data.experiencia.length > 0 && (
-        <Section title="Experiencia">
-          {data.experiencia.map((exp, i) => (
-            <ExperienceEntry key={i} exp={exp} />
-          ))}
-        </Section>
-      )}
-
-      {/* Habilidades */}
-      {show("skills") && hasAnySkill(data.habilidades) && (
-        <Section title="Habilidades">
-          <SkillRow label="Técnicas" values={data.habilidades.tecnicas} />
-          <SkillRow label="Habilidades Blandas" values={data.habilidades.blandas} />
-          <SkillRow label="Idiomas" values={data.habilidades.idiomas} />
-          <SkillRow label="Tecnologías" values={data.habilidades.tecnologias} />
-        </Section>
-      )}
-
-      {/* Educación y Certificaciones */}
-      {show("education") && (data.educacion.length > 0 || data.certificaciones.length > 0) && (
-        <Section title="Educación y Certificaciones">
-          {data.educacion.map((edu, i) => (
-            <div key={`edu-${i}`} className="cv-ref__entry">
-              <div className="cv-ref__entry-head">
-                <div className="cv-ref__entry-main">
-                  {edu.titulo && (
-                    <span className="cv-ref__entry-role">{edu.titulo}</span>
-                  )}
-                  {edu.institucion && (
-                    <>
-                      {" "}
-                      <span className="cv-ref__entry-org">— {edu.institucion}</span>
-                    </>
-                  )}
-                </div>
-                <div className="cv-ref__entry-aside">
-                  {edu.fecha_fin && (
-                    <div className="cv-ref__entry-date">{formatDate(edu.fecha_fin)}</div>
-                  )}
-                </div>
-              </div>
-              {edu.descripcion && <p className="cv-ref__para">{edu.descripcion}</p>}
-            </div>
-          ))}
-          {data.certificaciones.map((cert, i) => (
-            <div key={`cert-${i}`} className="cv-ref__entry">
-              <div className="cv-ref__entry-head">
-                <div className="cv-ref__entry-main">
-                  {cert.nombre && <span className="cv-ref__entry-role">{cert.nombre}</span>}
-                  {cert.institucion && (
-                    <>
-                      {" "}
-                      <span className="cv-ref__entry-org">— {cert.institucion}</span>
-                    </>
-                  )}
-                </div>
-                {cert.fecha && (
-                  <div className="cv-ref__entry-aside">
-                    <div className="cv-ref__entry-date">{cert.fecha}</div>
+      {/* Modern template: two-column layout with sidebar */}
+      {isModern ? (
+        <div className="cv-ref--modern-grid">
+          <div className="cv-ref--modern-main">
+            {show("summary") && resumen && (
+              <Section title="Perfil Profesional">
+                <p className="cv-ref__para">{resumen}</p>
+              </Section>
+            )}
+            {show("experience") && data.experiencia.length > 0 && (
+              <Section title="Experiencia">
+                {data.experiencia.map((exp, i) => (
+                  <ExperienceEntry key={i} exp={exp} />
+                ))}
+              </Section>
+            )}
+            {show("projects") && data.proyectos.length > 0 && (
+              <Section title="Proyectos">
+                {data.proyectos.map((proj, i) => (
+                  <div key={i} className="cv-ref__entry">
+                    <p className="cv-ref__proj-name">{proj.nombre}</p>
+                    <div className="cv-ref__proj-meta">
+                      {proj.rol && <span>Rol: {proj.rol}</span>}
+                      {proj.tecnologias.length > 0 && (
+                        <span>Tecnologias: {proj.tecnologias.join(", ")}</span>
+                      )}
+                      {proj.url && (
+                        <a className="cv-ref__proj-link-anchor" href={proj.url} target="_blank" rel="noopener noreferrer">{proj.url}</a>
+                      )}
+                    </div>
+                    {proj.descripcion && <p className="cv-ref__para" style={{ marginTop: 4 }}>{proj.descripcion}</p>}
                   </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </Section>
-      )}
-
-      {/* Proyectos */}
-      {show("projects") && data.proyectos.length > 0 && (
-        <Section title="Proyectos">
-          {data.proyectos.map((proj, i) => (
-            <div key={i} className="cv-ref__entry">
-              <p className="cv-ref__proj-name">{proj.nombre}</p>
-              <div className="cv-ref__proj-meta">
-                {proj.rol && <span>Rol: {proj.rol}</span>}
-                {proj.tecnologias.length > 0 && (
-                  <span>Tecnologías: {proj.tecnologias.join(", ")}</span>
-                )}
-                {proj.url && (
-                  <a
-                    className="cv-ref__proj-link-anchor"
-                    href={proj.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {proj.url}
-                  </a>
-                )}
-              </div>
-              {proj.descripcion && (
-                <p className="cv-ref__para" style={{ marginTop: 4 }}>
-                  {proj.descripcion}
-                </p>
-              )}
-            </div>
-          ))}
-        </Section>
-      )}
-
-      {/* Fortalezas */}
-      {data.fortalezas.length > 0 && (
-        <Section title="Adicional">
-          {data.fortalezas.map((f, i) => (
-            <div key={i} className="cv-ref__entry" style={{ marginBottom: 4 }}>
-              {f.nombre && <span className="cv-ref__entry-role">{f.nombre}</span>}
-              {f.descripcion && (
-                <p className="cv-ref__para" style={{ marginTop: 2 }}>{f.descripcion}</p>
-              )}
-            </div>
-          ))}
-        </Section>
+                ))}
+              </Section>
+            )}
+          </div>
+          <div className="cv-ref--modern-sidebar">
+            {show("skills") && hasAnySkill(data.habilidades) && (
+              <Section title="Habilidades">
+                <SkillRow label="Tecnicas" values={data.habilidades.tecnicas} />
+                <SkillRow label="Blandas" values={data.habilidades.blandas} />
+                <SkillRow label="Idiomas" values={data.habilidades.idiomas} />
+                <SkillRow label="Tecnologias" values={data.habilidades.tecnologias} />
+              </Section>
+            )}
+            {show("education") && (data.educacion.length > 0 || data.certificaciones.length > 0) && (
+              <Section title="Educacion">
+                {data.educacion.map((edu, i) => (
+                  <div key={`edu-${i}`} className="cv-ref__entry">
+                    <div className="cv-ref__entry-main">
+                      {edu.titulo && <span className="cv-ref__entry-role">{edu.titulo}</span>}
+                      {edu.institucion && <span className="cv-ref__entry-org">{edu.institucion}</span>}
+                    </div>
+                    {edu.fecha_fin && <div className="cv-ref__entry-date">{formatDate(edu.fecha_fin)}</div>}
+                  </div>
+                ))}
+                {data.certificaciones.map((cert, i) => (
+                  <div key={`cert-${i}`} className="cv-ref__entry">
+                    <div className="cv-ref__entry-main">
+                      {cert.nombre && <span className="cv-ref__entry-role">{cert.nombre}</span>}
+                      {cert.institucion && <span className="cv-ref__entry-org">{cert.institucion}</span>}
+                    </div>
+                    {cert.fecha && <div className="cv-ref__entry-date">{cert.fecha}</div>}
+                  </div>
+                ))}
+              </Section>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Standard single-column layout */}
+          {show("summary") && resumen && (
+            <Section title="Perfil Profesional" accent={isCreative}>
+              <p className="cv-ref__para">{resumen}</p>
+            </Section>
+          )}
+          {show("experience") && data.experiencia.length > 0 && (
+            <Section title="Experiencia" accent={isCreative}>
+              {data.experiencia.map((exp, i) => (
+                <ExperienceEntry key={i} exp={exp} />
+              ))}
+            </Section>
+          )}
+          {show("skills") && hasAnySkill(data.habilidades) && (
+            <Section title="Habilidades" accent={isCreative}>
+              <SkillRow label="Tecnicas" values={data.habilidades.tecnicas} />
+              <SkillRow label="Habilidades Blandas" values={data.habilidades.blandas} />
+              <SkillRow label="Idiomas" values={data.habilidades.idiomas} />
+              <SkillRow label="Tecnologias" values={data.habilidades.tecnologias} />
+            </Section>
+          )}
+          {show("education") && (data.educacion.length > 0 || data.certificaciones.length > 0) && (
+            <Section title={isAcademic ? "Educacion y Certificaciones" : "Educacion"} accent={isCreative}>
+              {data.educacion.map((edu, i) => (
+                <div key={`edu-${i}`} className="cv-ref__entry">
+                  <div className="cv-ref__entry-head">
+                    <div className="cv-ref__entry-main">
+                      {edu.titulo && <span className="cv-ref__entry-role">{edu.titulo}</span>}
+                      {edu.institucion && <span className="cv-ref__entry-org"> — {edu.institucion}</span>}
+                    </div>
+                    <div className="cv-ref__entry-aside">
+                      {edu.fecha_fin && <div className="cv-ref__entry-date">{formatDate(edu.fecha_fin)}</div>}
+                    </div>
+                  </div>
+                  {edu.descripcion && <p className="cv-ref__para">{edu.descripcion}</p>}
+                </div>
+              ))}
+              {data.certificaciones.map((cert, i) => (
+                <div key={`cert-${i}`} className="cv-ref__entry">
+                  <div className="cv-ref__entry-head">
+                    <div className="cv-ref__entry-main">
+                      {cert.nombre && <span className="cv-ref__entry-role">{cert.nombre}</span>}
+                      {cert.institucion && <span className="cv-ref__entry-org"> — {cert.institucion}</span>}
+                    </div>
+                    {cert.fecha && (
+                      <div className="cv-ref__entry-aside">
+                        <div className="cv-ref__entry-date">{cert.fecha}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </Section>
+          )}
+          {show("projects") && data.proyectos.length > 0 && (
+            <Section title="Proyectos" accent={isCreative}>
+              {data.proyectos.map((proj, i) => (
+                <div key={i} className="cv-ref__entry">
+                  <p className="cv-ref__proj-name">{proj.nombre}</p>
+                  <div className="cv-ref__proj-meta">
+                    {proj.rol && <span>Rol: {proj.rol}</span>}
+                    {proj.tecnologias.length > 0 && (
+                      <span>Tecnologias: {proj.tecnologias.join(", ")}</span>
+                    )}
+                    {proj.url && (
+                      <a className="cv-ref__proj-link-anchor" href={proj.url} target="_blank" rel="noopener noreferrer">{proj.url}</a>
+                    )}
+                  </div>
+                  {proj.descripcion && <p className="cv-ref__para" style={{ marginTop: 4 }}>{proj.descripcion}</p>}
+                </div>
+              ))}
+            </Section>
+          )}
+          {data.fortalezas.length > 0 && (
+            <Section title="Adicional" accent={isCreative}>
+              {data.fortalezas.map((f, i) => (
+                <div key={i} className="cv-ref__entry" style={{ marginBottom: 4 }}>
+                  {f.nombre && <span className="cv-ref__entry-role">{f.nombre}</span>}
+                  {f.descripcion && <p className="cv-ref__para" style={{ marginTop: 2 }}>{f.descripcion}</p>}
+                </div>
+              ))}
+            </Section>
+          )}
+        </>
       )}
     </>
   );
@@ -239,9 +281,9 @@ function CVBody({ data, visibleSections }: { data: CVContext; visibleSections?: 
 
 // ── Sub-components ───────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, accent }: { title: string; children: React.ReactNode; accent?: boolean }) {
   return (
-    <div className="cv-ref__section">
+    <div className={`cv-ref__section ${accent ? "cv-ref__section--accent" : ""}`}>
       <h2 className="cv-ref__section-title">{title}</h2>
       {children}
     </div>

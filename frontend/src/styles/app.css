@@ -747,6 +747,41 @@ h5 { font-size: var(--text-h5); font-weight: 600; line-height: var(--line-height
 .cv-ref__proj-desc { color: #333; }
 .cv-ref__proj-link { color: #0071e3; }
 .cv-ref__proj-link-anchor { color: #0071e3 !important; text-decoration: underline !important; font-size: 11px; }
+
+/* ── Template Variants ──────────────────────────────── */
+
+/* Executive: larger name, formal spacing */
+.cv-paper--executive .cv-ref__name { font-size: 30px; letter-spacing: -0.01em; }
+.cv-paper--executive .cv-ref__header { padding-bottom: 16px; margin-bottom: 20px; }
+.cv-paper--executive .cv-ref__section { margin-bottom: 18px; }
+.cv-ref__header--executive { border-bottom-width: 2px; }
+.cv-ref__name--executive { font-size: 30px; }
+
+/* Creative: accent-colored section titles with left border */
+.cv-ref__section--accent { border-left: 3px solid var(--cv-accent, #0071e3); padding-left: 12px; }
+.cv-ref__section--accent .cv-ref__section-title { border-bottom: none; padding-bottom: 0; margin-bottom: 6px; }
+.cv-ref__header--creative { border-bottom-color: var(--cv-accent, #0071e3); border-bottom-width: 2px; }
+.cv-ref__role--creative { color: var(--cv-accent, #0071e3); font-weight: 500; }
+
+/* Modern: two-column grid layout */
+.cv-ref--modern-grid { display: grid; grid-template-columns: 1fr 200px; gap: 20px; }
+.cv-ref--modern-sidebar { border-left: 1px solid #d0d0d2; padding-left: 16px; }
+.cv-ref--modern-sidebar .cv-ref__section { margin-bottom: 14px; }
+.cv-ref--modern-sidebar .cv-ref__section-title { font-size: 10px; }
+.cv-ref--modern-sidebar .cv-ref__skills-row { font-size: 11px; }
+.cv-ref--modern-sidebar .cv-ref__entry { margin-bottom: 6px; }
+.cv-ref--modern-sidebar .cv-ref__entry-role { font-size: 11px; }
+.cv-ref--modern-sidebar .cv-ref__entry-org { font-size: 10px; display: block; }
+.cv-ref--modern-sidebar .cv-ref__entry-date { font-size: 10px; }
+.cv-ref--modern-main .cv-ref__section { margin-bottom: 14px; }
+
+/* Minimal/Blank: no accent, clean simple */
+.cv-paper--minimal .cv-ref__section-title,
+.cv-paper--blank .cv-ref__section-title { color: #1d1d1f; border-bottom-color: #e6e6e8; }
+
+/* Academic: simpler, education-focused */
+.cv-paper--academic .cv-ref__section-title { color: #1d1d1f; letter-spacing: 0.06em; }
+
 .cv-preview-empty { color: #000; font-size: 14px; }
 .cv-preview-hint { color: #555; font-size: 12px; margin-top: 8px; }
 .cv-preview-hint a { color: var(--accent); text-decoration: underline; }
