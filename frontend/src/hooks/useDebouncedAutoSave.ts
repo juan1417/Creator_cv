@@ -128,13 +128,11 @@ export function useDebouncedAutoSave<T>({
         pendingRef.current = false;
         // Backup inmediato a localStorage
         writeToStorage(valueRef.current);
-        // Intentar save final con keepalive
+        // Intentar save final con keepalive (sobrevive F5 / cierre de tab)
         const match = window.location.pathname.match(/\/cv\/([^/]+)/);
         if (match) {
           const token = localStorage.getItem("access_token");
           const contextStr = JSON.stringify(valueRef.current, null, 2);
-          const body = JSON.stringify({ context_json: contextStr });
-          const blob = new Blob([body], { type: "application/json" });
           try {
             fetch(`/api/cvs/${match[1]}`, {
               method: "PUT",
@@ -142,7 +140,7 @@ export function useDebouncedAutoSave<T>({
                 "Content-Type": "application/json",
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
               },
-              body: blob,
+              body: JSON.stringify({ context_json: contextStr }),
               keepalive: true,
             }).then((res) => {
               if (res.ok) clearStorage();

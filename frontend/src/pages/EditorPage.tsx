@@ -66,6 +66,20 @@ export function EditorPage() {
 
   const load = useCallback(async () => {
     if (!id) return;
+    // Check localStorage backup first (fast, synchronous)
+    const backupRaw = localStorage.getItem(`cv_draft_${id}`);
+    if (backupRaw) {
+      try {
+        const backup = JSON.parse(backupRaw) as CVContext;
+        setCtx(backup);
+        // Still fetch CV metadata (title, etc.) but don't overwrite context
+        const data = await apiGetCV(id);
+        setCV(data);
+        setTitle(data.title);
+        setLoading(false);
+        return;
+      } catch { /* corrupted backup, fall through */ }
+    }
     try {
       const data = await apiGetCV(id);
       setCV(data);
@@ -88,19 +102,12 @@ export function EditorPage() {
   }, [id, ctxJson]);
 
   const storageKey = id ? `cv_draft_${id}` : undefined;
-  const { status: saveStatus, error: saveError, flush, restoredFromStorage } = useDebouncedAutoSave({
+  const { status: saveStatus, error: saveError, flush } = useDebouncedAutoSave({
     value: ctx,
     save,
     storageKey,
     delay: 800,
   });
-
-  // Si hay datos en localStorage más recientes, restaurarlos en el estado
-  useEffect(() => {
-    if (restoredFromStorage) {
-      setCtx(restoredFromStorage);
-    }
-  }, [restoredFromStorage]);
 
   // Save before tab close / refresh
   useEffect(() => {
