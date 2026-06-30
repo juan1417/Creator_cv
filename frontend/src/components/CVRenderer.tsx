@@ -283,6 +283,7 @@ function buildContactLine(meta: CVContext["meta"]): string[] {
   if (meta.contacto.email.trim()) items.push(meta.contacto.email);
   if (meta.contacto.linkedin.trim()) items.push(meta.contacto.linkedin);
   if (meta.contacto.ubicacion.trim()) items.push(meta.contacto.ubicacion);
+  if (meta.portafolio_url.trim()) items.push(meta.portafolio_url);
   return items;
 }
 

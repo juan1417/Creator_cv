@@ -249,7 +249,7 @@ export function parseContext(raw: string): CVContext {
     palabras_clave: arr(p.palabras_clave),
   };
 
-  const experiencia: Experience[] = (arr(obj.experiencia) as unknown[]).map(
+  const experiencia: Experience[] = objArr(obj.experiencia).map(
     (e) => {
       const x = (e ?? {}) as Record<string, unknown>;
       return {
@@ -263,7 +263,7 @@ export function parseContext(raw: string): CVContext {
     }
   );
 
-  const educacion: Education[] = (arr(obj.educacion) as unknown[]).map((e) => {
+  const educacion: Education[] = objArr(obj.educacion).map((e) => {
     const x = (e ?? {}) as Record<string, unknown>;
     return {
       titulo: str(x.titulo),
@@ -281,7 +281,7 @@ export function parseContext(raw: string): CVContext {
     tecnologias: arr(hab.tecnologias),
   };
 
-  const proyectos: Project[] = (arr(obj.proyectos) as unknown[]).map((p) => {
+  const proyectos: Project[] = objArr(obj.proyectos).map((p) => {
     const x = (p ?? {}) as Record<string, unknown>;
     return {
       nombre: str(x.nombre),
@@ -292,9 +292,7 @@ export function parseContext(raw: string): CVContext {
     };
   });
 
-  const certificaciones: Certification[] = (
-    arr(obj.certificaciones) as unknown[]
-  ).map((c) => {
+  const certificaciones: Certification[] = objArr(obj.certificaciones).map((c) => {
     const x = (c ?? {}) as Record<string, unknown>;
     return {
       nombre: str(x.nombre),
@@ -303,7 +301,7 @@ export function parseContext(raw: string): CVContext {
     };
   });
 
-  const fortalezas: Fortaleza[] = (arr(obj.fortalezas) as unknown[]).map((f) => {
+  const fortalezas: Fortaleza[] = objArr(obj.fortalezas).map((f) => {
     const x = (f ?? {}) as Record<string, unknown>;
     return { nombre: str(x.nombre), descripcion: str(x.descripcion) };
   });
@@ -361,6 +359,11 @@ function str(v: unknown): string {
 
 function arr(v: unknown): string[] {
   if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
+  return [];
+}
+
+function objArr(v: unknown): unknown[] {
+  if (Array.isArray(v)) return v.filter((x) => typeof x === "object" && x !== null);
   return [];
 }
 
