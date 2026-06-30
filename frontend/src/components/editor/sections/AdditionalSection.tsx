@@ -1,10 +1,4 @@
-import {
-  emptyCertification,
-  emptyFortaleza,
-  type Certification,
-  type Fortaleza,
-} from "../../../types/cv";
-import { TextField, TextAreaField } from "./_form";
+import { emptyCertification, emptyFortaleza, type Certification, type Fortaleza } from "../../../types/cv";
 
 interface AdditionalSectionProps {
   certificaciones: Certification[];
@@ -19,131 +13,105 @@ export function AdditionalSection({
   onChangeCertificaciones,
   onChangeFortalezas,
 }: AdditionalSectionProps) {
-  const updateCert = (i: number, patch: Partial<Certification>) => {
-    onChangeCertificaciones(
-      certificaciones.map((c, idx) => (idx === i ? { ...c, ...patch } : c))
-    );
-  };
-  const removeCert = (i: number) =>
-    onChangeCertificaciones(certificaciones.filter((_, idx) => idx !== i));
-  const addCert = () => onChangeCertificaciones([...certificaciones, emptyCertification()]);
+  return (
+    <>
+      {/* Certificaciones */}
+      <CertificacionesSection value={certificaciones} onChange={onChangeCertificaciones} />
+      {/* Fortalezas */}
+      <FortalezasSection value={fortalezas} onChange={onChangeFortalezas} />
+    </>
+  );
+}
 
-  const updateFort = (i: number, patch: Partial<Fortaleza>) => {
-    onChangeFortalezas(fortalezas.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
-  };
-  const removeFort = (i: number) =>
-    onChangeFortalezas(fortalezas.filter((_, idx) => idx !== i));
-  const addFort = () => onChangeFortalezas([...fortalezas, emptyFortaleza()]);
+function CertificacionesSection({ value, onChange }: { value: Certification[]; onChange: (n: Certification[]) => void }) {
+  const update = (i: number, patch: Partial<Certification>) =>
+    onChange(value.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
+  const add = () => onChange([...value, emptyCertification()]);
 
   return (
-    <section className="editor-section">
-      <h3 className="editor-section__title">Adicional</h3>
-
-      {/* Certificaciones */}
-      <div className="editor-subsection">
-        <div className="editor-section__head">
-          <h4 className="editor-section__subtitle">Certificaciones</h4>
-          <button
-            type="button"
-            className="btn btn-secondary btn-compact"
-            onClick={addCert}
-          >
-            + Agregar
-          </button>
-        </div>
-        {certificaciones.length === 0 ? (
-          <p className="help">Sin certificaciones.</p>
+    <div className="section-group">
+      <div className="section-group-header">
+        <div className="section-group-title">Certificaciones</div>
+        <button className="btn btn-s btn-sm" type="button" onClick={add}>+ Agregar</button>
+      </div>
+      <div className="section-card">
+        {value.length === 0 ? (
+          <p style={{ color: "var(--muted)", fontSize: 13 }}>Sin certificaciones.</p>
         ) : (
-          <ul className="entry-list">
-            {certificaciones.map((c, i) => (
-              <li key={i} className="entry-card">
-                <div className="entry-card__head">
-                  <strong className="entry-card__title">{c.nombre || "(sin nombre)"}</strong>
-                  <button
-                    type="button"
-                    className="btn btn-danger btn-compact"
-                    onClick={() => removeCert(i)}
-                    aria-label={`Eliminar certificación ${i + 1}`}
-                  >
-                    Eliminar
-                  </button>
+          value.map((c, i) => (
+            <div key={i} className="cv-item">
+              <div className="cv-item-header">
+                <div>
+                  <div className="cv-item-title">{c.nombre || "(sin nombre)"}</div>
+                  <div className="cv-item-subtitle">{[c.institucion, c.fecha].filter(Boolean).join(" · ")}</div>
                 </div>
-                <div className="form-row" style={{ marginTop: 12 }}>
-                  <TextField
-                    label="Nombre"
-                    htmlFor={`cert-${i}-nombre`}
-                    value={c.nombre}
-                    onChange={(v) => updateCert(i, { nombre: v })}
-                  />
-                  <TextField
-                    label="Institución"
-                    htmlFor={`cert-${i}-institucion`}
-                    value={c.institucion}
-                    onChange={(v) => updateCert(i, { institucion: v })}
-                  />
-                  <TextField
-                    label="Año"
-                    htmlFor={`cert-${i}-fecha`}
-                    value={c.fecha}
-                    onChange={(v) => updateCert(i, { fecha: v })}
-                  />
+                <div className="cv-item-actions">
+                  <button className="cv-item-btn" title="Eliminar" type="button" onClick={() => remove(i)}>✕</button>
                 </div>
-              </li>
-            ))}
-          </ul>
+              </div>
+              <div className="form-row" style={{ marginTop: 12 }} onClick={(e) => e.stopPropagation()}>
+                <div className="form-group">
+                  <label className="form-label">Nombre</label>
+                  <input className="form-input" type="text" value={c.nombre} onChange={(e) => update(i, { nombre: e.target.value })} placeholder="AWS Solutions Architect" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Institución</label>
+                  <input className="form-input" type="text" value={c.institucion} onChange={(e) => update(i, { institucion: e.target.value })} placeholder="Amazon Web Services" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Año</label>
+                  <input className="form-input" type="text" value={c.fecha} onChange={(e) => update(i, { fecha: e.target.value })} placeholder="2024" />
+                </div>
+              </div>
+            </div>
+          ))
         )}
       </div>
+    </div>
+  );
+}
 
-      {/* Fortalezas */}
-      <div className="editor-subsection">
-        <div className="editor-section__head">
-          <h4 className="editor-section__subtitle">Fortalezas / Adicional</h4>
-          <button
-            type="button"
-            className="btn btn-secondary btn-compact"
-            onClick={addFort}
-          >
-            + Agregar
-          </button>
-        </div>
-        {fortalezas.length === 0 ? (
-          <p className="help">Sin fortalezas.</p>
+function FortalezasSection({ value, onChange }: { value: Fortaleza[]; onChange: (n: Fortaleza[]) => void }) {
+  const update = (i: number, patch: Partial<Fortaleza>) =>
+    onChange(value.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
+  const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
+  const add = () => onChange([...value, emptyFortaleza()]);
+
+  return (
+    <div className="section-group">
+      <div className="section-group-header">
+        <div className="section-group-title">Fortalezas / Adicional</div>
+        <button className="btn btn-s btn-sm" type="button" onClick={add}>+ Agregar</button>
+      </div>
+      <div className="section-card">
+        {value.length === 0 ? (
+          <p style={{ color: "var(--muted)", fontSize: 13 }}>Sin fortalezas.</p>
         ) : (
-          <ul className="entry-list">
-            {fortalezas.map((f, i) => (
-              <li key={i} className="entry-card">
-                <div className="entry-card__head">
-                  <strong className="entry-card__title">{f.nombre || "(sin nombre)"}</strong>
-                  <button
-                    type="button"
-                    className="btn btn-danger btn-compact"
-                    onClick={() => removeFort(i)}
-                    aria-label={`Eliminar fortaleza ${i + 1}`}
-                  >
-                    Eliminar
-                  </button>
+          value.map((f, i) => (
+            <div key={i} className="cv-item">
+              <div className="cv-item-header">
+                <div>
+                  <div className="cv-item-title">{f.nombre || "(sin nombre)"}</div>
                 </div>
-                <div className="form-stack" style={{ marginTop: 12 }}>
-                  <TextField
-                    label="Nombre"
-                    htmlFor={`fort-${i}-nombre`}
-                    value={f.nombre}
-                    onChange={(v) => updateFort(i, { nombre: v })}
-                    placeholder="Liderazgo técnico"
-                  />
-                  <TextAreaField
-                    label="Descripción"
-                    htmlFor={`fort-${i}-desc`}
-                    value={f.descripcion}
-                    onChange={(v) => updateFort(i, { descripcion: v })}
-                    rows={2}
-                  />
+                <div className="cv-item-actions">
+                  <button className="cv-item-btn" title="Eliminar" type="button" onClick={() => remove(i)}>✕</button>
                 </div>
-              </li>
-            ))}
-          </ul>
+              </div>
+              <div className="form-row" style={{ marginTop: 12 }} onClick={(e) => e.stopPropagation()}>
+                <div className="form-group">
+                  <label className="form-label">Nombre</label>
+                  <input className="form-input" type="text" value={f.nombre} onChange={(e) => update(i, { nombre: e.target.value })} placeholder="Liderazgo técnico" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Descripción</label>
+                  <textarea className="form-input form-textarea" rows={2} value={f.descripcion} onChange={(e) => update(i, { descripcion: e.target.value })} />
+                </div>
+              </div>
+            </div>
+          ))
         )}
       </div>
-    </section>
+    </div>
   );
 }

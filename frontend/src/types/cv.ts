@@ -337,7 +337,7 @@ export function completionPercent(ctx: CVContext): number {
   if (c.email.trim() || c.telefono.trim() || c.linkedin.trim()) filled += 1;
 
   total += 1;
-  if (ctx.perfil_profesional.resumen.trim()) filled += 1;
+  if (m.objetivo_cv.trim()) filled += 1;
 
   total += 1;
   if (ctx.experiencia.length > 0) filled += 1;

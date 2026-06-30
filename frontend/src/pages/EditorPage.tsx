@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { apiGetCV, apiUpdateCV, type CV } from "../lib/api";
 import { parseContext, emptyContext, type CVContext } from "../types/cv";
 import { CVRenderer } from "../components/CVRenderer";
@@ -38,6 +38,7 @@ type AiMsg = { role: "ai" | "user" | "system"; content: string };
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [cv, setCV] = useState<CV | null>(null);
   const [title, setTitle] = useState("");
   const [ctx, setCtx] = useState<CVContext>(emptyContext);
@@ -86,7 +87,25 @@ export function EditorPage() {
     await apiUpdateCV(id, { context_json: ctxJson });
   }, [id, ctxJson]);
 
-  const { status: saveStatus, error: saveError } = useDebouncedAutoSave({ value: ctx, save, delay: 1500 });
+  const { status: saveStatus, error: saveError, flush } = useDebouncedAutoSave({ value: ctx, save, delay: 800 });
+
+  // Save before tab close / refresh
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (saveStatus === "pending" || saveStatus === "saving") {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [saveStatus]);
+
+  const handleBack = async () => {
+    if (saveStatus === "pending" || saveStatus === "saving") {
+      await flush();
+    }
+    navigate("/");
+  };
 
   const handleTitleBlur = async () => {
     if (!id || !title.trim()) return;
@@ -112,7 +131,7 @@ export function EditorPage() {
       {/* Topbar */}
       <div className="topbar">
         <div className="topbar-left">
-          <Link to="/" className="topbar-back">←</Link>
+          <button type="button" className="topbar-back" onClick={handleBack}>←</button>
           <div className="topbar-title">{cv.title}</div>
         </div>
         <div className="topbar-actions">
