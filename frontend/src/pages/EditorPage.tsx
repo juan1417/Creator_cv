@@ -141,7 +141,7 @@ export function EditorPage() {
   if (!cv) return <div className="content"><p className="empty-state">CV no encontrado.</p><Link to="/" className="btn btn-primary">Volver</Link></div>;
 
   return (
-    <>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* Topbar */}
       <div className="topbar">
         <div className="topbar-left">
@@ -338,7 +338,7 @@ export function EditorPage() {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
