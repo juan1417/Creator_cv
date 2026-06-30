@@ -98,14 +98,17 @@ function CVBody({ data, visibleSections }: { data: CVContext; visibleSections?: 
             <p className="cv-ref__role">{tituloProf}</p>
           )}
           {contactLine.length > 0 && (
-            <p className="cv-ref__contact-line">
+            <div className="cv-ref__contact-line">
               {contactLine.map((item, i) => (
-                <span key={i}>
+                <span key={i} className="cv-ref__contact-item">
                   {i > 0 && <span className="cv-ref__sep">|</span>}
-                  <span className="cv-ref__contact-val">{item}</span>
+                  <span className="cv-ref__contact-val">{item.value}</span>
                 </span>
               ))}
-            </p>
+            </div>
+          )}
+          {m.portafolio_descripcion.trim() && (
+            <p className="cv-ref__portfolio-desc">{m.portafolio_descripcion}</p>
           )}
         </header>
       )}
@@ -163,11 +166,24 @@ function CVBody({ data, visibleSections }: { data: CVContext; visibleSections?: 
             </div>
           ))}
           {data.certificaciones.map((cert, i) => (
-            <p key={`cert-${i}`} className="cv-ref__para">
-              {cert.nombre}
-              {cert.institucion ? ` — ${cert.institucion}` : ""}
-              {cert.fecha ? ` (${cert.fecha})` : ""}
-            </p>
+            <div key={`cert-${i}`} className="cv-ref__entry">
+              <div className="cv-ref__entry-head">
+                <div className="cv-ref__entry-main">
+                  {cert.nombre && <span className="cv-ref__entry-role">{cert.nombre}</span>}
+                  {cert.institucion && (
+                    <>
+                      {" "}
+                      <span className="cv-ref__entry-org">— {cert.institucion}</span>
+                    </>
+                  )}
+                </div>
+                {cert.fecha && (
+                  <div className="cv-ref__entry-aside">
+                    <div className="cv-ref__entry-date">{cert.fecha}</div>
+                  </div>
+                )}
+              </div>
+            </div>
           ))}
         </Section>
       )}
@@ -208,9 +224,12 @@ function CVBody({ data, visibleSections }: { data: CVContext; visibleSections?: 
       {data.fortalezas.length > 0 && (
         <Section title="Adicional">
           {data.fortalezas.map((f, i) => (
-            <p key={i} className="cv-ref__para">
-              {f.nombre || f.descripcion}
-            </p>
+            <div key={i} className="cv-ref__entry" style={{ marginBottom: 4 }}>
+              {f.nombre && <span className="cv-ref__entry-role">{f.nombre}</span>}
+              {f.descripcion && (
+                <p className="cv-ref__para" style={{ marginTop: 2 }}>{f.descripcion}</p>
+              )}
+            </div>
           ))}
         </Section>
       )}
@@ -277,13 +296,13 @@ function SkillRow({ label, values }: { label: string; values: string[] }) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function buildContactLine(meta: CVContext["meta"]): string[] {
-  const items: string[] = [];
-  if (meta.contacto.telefono.trim()) items.push(meta.contacto.telefono);
-  if (meta.contacto.email.trim()) items.push(meta.contacto.email);
-  if (meta.contacto.linkedin.trim()) items.push(meta.contacto.linkedin);
-  if (meta.contacto.ubicacion.trim()) items.push(meta.contacto.ubicacion);
-  if (meta.portafolio_url.trim()) items.push(meta.portafolio_url);
+function buildContactLine(meta: CVContext["meta"]): { label: string; value: string }[] {
+  const items: { label: string; value: string }[] = [];
+  if (meta.contacto.telefono.trim()) items.push({ label: "", value: meta.contacto.telefono });
+  if (meta.contacto.email.trim()) items.push({ label: "", value: meta.contacto.email });
+  if (meta.contacto.linkedin.trim()) items.push({ label: "", value: meta.contacto.linkedin });
+  if (meta.contacto.ubicacion.trim()) items.push({ label: "", value: meta.contacto.ubicacion });
+  if (meta.portafolio_url.trim()) items.push({ label: "", value: meta.portafolio_url });
   return items;
 }
 
