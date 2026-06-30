@@ -1,0 +1,371 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { CV } from "../lib/api";
+import { parseContext, type CVContext, type CVSettings, type Experience } from "../types/cv";
+
+interface CVRendererProps {
+  cv: CV;
+  settings?: CVSettings;
+  /** Modo "mini" para thumbnails en el dashboard. */
+  mini?: boolean;
+}
+
+// 210mm en píxeles (96 DPI): 210 × 96 / 25.4
+const A4_WIDTH_PX = 793.7;
+
+/** Renderiza el CV en hoja A4 (blanca). Fuente única de verdad para preview + thumbnails. */
+export function CVRenderer({ cv, settings, mini = false }: CVRendererProps) {
+  const data: CVContext = useMemo(() => parseContext(cv.context_json), [cv.context_json]);
+
+  const style: React.CSSProperties = useMemo(() => {
+    if (!settings) return {};
+    const fontMap: Record<string, string> = {
+      system: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif',
+      georgia: 'Georgia, "Times New Roman", serif',
+      garamond: '"EB Garamond", Garamond, serif',
+      helvetica: 'Helvetica, Arial, sans-serif',
+    };
+    return {
+      "--cv-accent": settings.accentColor,
+      "--cv-font": fontMap[settings.fontFamily] || fontMap.system,
+      "--cv-font-size": `${settings.fontSize}px`,
+      "--cv-line-height": settings.lineHeight,
+    } as React.CSSProperties;
+  }, [settings]);
+
+  if (mini) {
+    return <Thumbnail data={data} />;
+  }
+
+  const vs = settings?.visibleSections;
+  const tpl = settings?.template || "minimal";
+
+  return (
+    <div className={`cv-paper cv-paper--${tpl}`} style={style}>
+      <div className="cv-ref">
+        <CVBody data={data} visibleSections={vs} template={tpl} />
+      </div>
+    </div>
+  );
+}
+
+/** Thumbnail escalado al ancho del contenedor (escala CSS transform). */
+function Thumbnail({ data }: { data: CVContext }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.3);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      if (w > 0) setScale(w / A4_WIDTH_PX);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className="cv-thumb" aria-hidden="true">
+      <div
+        className="cv-thumb__paper"
+        style={{ transform: `scale(${scale})` }}
+      >
+        <div className="cv-ref">
+          <CVBody data={data} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CVBody({ data, visibleSections, template }: { data: CVContext; visibleSections?: Record<string, boolean>; template?: string }) {
+  const m = data.meta;
+  const nombre = m.nombre_completo.trim();
+  const tituloProf = m.titulo_profesional.trim();
+  const contactLine = buildContactLine(m);
+
+  const resumen = m.objetivo_cv.trim();
+  const show = (key: string) => !visibleSections || visibleSections[key] !== false;
+  const isModern = template === "modern";
+  const isExecutive = template === "executive";
+  const isCreative = template === "creative";
+  const isAcademic = template === "academic";
+  const isMinimal = template === "minimal" || template === "blank";
+
+  return (
+    <>
+      {/* Header */}
+      {(nombre || tituloProf || contactLine.length > 0) && (
+        <header className={`cv-ref__header ${isExecutive ? "cv-ref__header--executive" : ""} ${isCreative ? "cv-ref__header--creative" : ""}`}>
+          {nombre && <h1 className={`cv-ref__name ${isExecutive ? "cv-ref__name--executive" : ""}`}>{nombre}</h1>}
+          {tituloProf && (
+            <p className={`cv-ref__role ${isCreative ? "cv-ref__role--creative" : ""}`}>{tituloProf}</p>
+          )}
+          {contactLine.length > 0 && (
+            <div className="cv-ref__contact-line">
+              {contactLine.map((item, i) => (
+                <span key={i} className="cv-ref__contact-item">
+                  {i > 0 && <span className="cv-ref__sep">|</span>}
+                  <span className="cv-ref__contact-val">{item.value}</span>
+                </span>
+              ))}
+            </div>
+          )}
+          {m.portafolio_descripcion.trim() && (
+            <p className="cv-ref__portfolio-desc">{m.portafolio_descripcion}</p>
+          )}
+        </header>
+      )}
+
+      {/* Modern template: two-column layout with sidebar */}
+      {isModern ? (
+        <div className="cv-ref--modern-grid">
+          <div className="cv-ref--modern-main">
+            {show("summary") && resumen && (
+              <Section title="Perfil Profesional">
+                <p className="cv-ref__para">{resumen}</p>
+              </Section>
+            )}
+            {show("experience") && data.experiencia.length > 0 && (
+              <Section title="Experiencia">
+                {data.experiencia.map((exp, i) => (
+                  <ExperienceEntry key={i} exp={exp} />
+                ))}
+              </Section>
+            )}
+            {show("projects") && data.proyectos.length > 0 && (
+              <Section title="Proyectos">
+                {data.proyectos.map((proj, i) => (
+                  <div key={i} className="cv-ref__entry">
+                    <p className="cv-ref__proj-name">{proj.nombre}</p>
+                    <div className="cv-ref__proj-meta">
+                      {proj.rol && <span>Rol: {proj.rol}</span>}
+                      {proj.tecnologias.length > 0 && (
+                        <span>Tecnologias: {proj.tecnologias.join(", ")}</span>
+                      )}
+                      {proj.url && (
+                        <a className="cv-ref__proj-link-anchor" href={proj.url} target="_blank" rel="noopener noreferrer">{proj.url}</a>
+                      )}
+                    </div>
+                    {proj.descripcion && <p className="cv-ref__para" style={{ marginTop: 4 }}>{proj.descripcion}</p>}
+                  </div>
+                ))}
+              </Section>
+            )}
+          </div>
+          <div className="cv-ref--modern-sidebar">
+            {show("skills") && hasAnySkill(data.habilidades) && (
+              <Section title="Habilidades">
+                <SkillRow label="Tecnicas" values={data.habilidades.tecnicas} />
+                <SkillRow label="Blandas" values={data.habilidades.blandas} />
+                <SkillRow label="Idiomas" values={data.habilidades.idiomas} />
+                <SkillRow label="Tecnologias" values={data.habilidades.tecnologias} />
+              </Section>
+            )}
+            {show("education") && (data.educacion.length > 0 || data.certificaciones.length > 0) && (
+              <Section title="Educacion">
+                {data.educacion.map((edu, i) => (
+                  <div key={`edu-${i}`} className="cv-ref__entry">
+                    <div className="cv-ref__entry-main">
+                      {edu.titulo && <span className="cv-ref__entry-role">{edu.titulo}</span>}
+                      {edu.institucion && <span className="cv-ref__entry-org">{edu.institucion}</span>}
+                    </div>
+                    {edu.fecha_fin && <div className="cv-ref__entry-date">{formatDate(edu.fecha_fin)}</div>}
+                  </div>
+                ))}
+                {data.certificaciones.map((cert, i) => (
+                  <div key={`cert-${i}`} className="cv-ref__entry">
+                    <div className="cv-ref__entry-main">
+                      {cert.nombre && <span className="cv-ref__entry-role">{cert.nombre}</span>}
+                      {cert.institucion && <span className="cv-ref__entry-org">{cert.institucion}</span>}
+                    </div>
+                    {cert.fecha && <div className="cv-ref__entry-date">{cert.fecha}</div>}
+                  </div>
+                ))}
+              </Section>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Standard single-column layout */}
+          {show("summary") && resumen && (
+            <Section title="Perfil Profesional" accent={isCreative}>
+              <p className="cv-ref__para">{resumen}</p>
+            </Section>
+          )}
+          {show("experience") && data.experiencia.length > 0 && (
+            <Section title="Experiencia" accent={isCreative}>
+              {data.experiencia.map((exp, i) => (
+                <ExperienceEntry key={i} exp={exp} />
+              ))}
+            </Section>
+          )}
+          {show("skills") && hasAnySkill(data.habilidades) && (
+            <Section title="Habilidades" accent={isCreative}>
+              <SkillRow label="Tecnicas" values={data.habilidades.tecnicas} />
+              <SkillRow label="Habilidades Blandas" values={data.habilidades.blandas} />
+              <SkillRow label="Idiomas" values={data.habilidades.idiomas} />
+              <SkillRow label="Tecnologias" values={data.habilidades.tecnologias} />
+            </Section>
+          )}
+          {show("education") && (data.educacion.length > 0 || data.certificaciones.length > 0) && (
+            <Section title={isAcademic ? "Educacion y Certificaciones" : "Educacion"} accent={isCreative}>
+              {data.educacion.map((edu, i) => (
+                <div key={`edu-${i}`} className="cv-ref__entry">
+                  <div className="cv-ref__entry-head">
+                    <div className="cv-ref__entry-main">
+                      {edu.titulo && <span className="cv-ref__entry-role">{edu.titulo}</span>}
+                      {edu.institucion && <span className="cv-ref__entry-org"> — {edu.institucion}</span>}
+                    </div>
+                    <div className="cv-ref__entry-aside">
+                      {edu.fecha_fin && <div className="cv-ref__entry-date">{formatDate(edu.fecha_fin)}</div>}
+                    </div>
+                  </div>
+                  {edu.descripcion && <p className="cv-ref__para">{edu.descripcion}</p>}
+                </div>
+              ))}
+              {data.certificaciones.map((cert, i) => (
+                <div key={`cert-${i}`} className="cv-ref__entry">
+                  <div className="cv-ref__entry-head">
+                    <div className="cv-ref__entry-main">
+                      {cert.nombre && <span className="cv-ref__entry-role">{cert.nombre}</span>}
+                      {cert.institucion && <span className="cv-ref__entry-org"> — {cert.institucion}</span>}
+                    </div>
+                    {cert.fecha && (
+                      <div className="cv-ref__entry-aside">
+                        <div className="cv-ref__entry-date">{cert.fecha}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </Section>
+          )}
+          {show("projects") && data.proyectos.length > 0 && (
+            <Section title="Proyectos" accent={isCreative}>
+              {data.proyectos.map((proj, i) => (
+                <div key={i} className="cv-ref__entry">
+                  <p className="cv-ref__proj-name">{proj.nombre}</p>
+                  <div className="cv-ref__proj-meta">
+                    {proj.rol && <span>Rol: {proj.rol}</span>}
+                    {proj.tecnologias.length > 0 && (
+                      <span>Tecnologias: {proj.tecnologias.join(", ")}</span>
+                    )}
+                    {proj.url && (
+                      <a className="cv-ref__proj-link-anchor" href={proj.url} target="_blank" rel="noopener noreferrer">{proj.url}</a>
+                    )}
+                  </div>
+                  {proj.descripcion && <p className="cv-ref__para" style={{ marginTop: 4 }}>{proj.descripcion}</p>}
+                </div>
+              ))}
+            </Section>
+          )}
+          {data.fortalezas.length > 0 && (
+            <Section title="Adicional" accent={isCreative}>
+              {data.fortalezas.map((f, i) => (
+                <div key={i} className="cv-ref__entry" style={{ marginBottom: 4 }}>
+                  {f.nombre && <span className="cv-ref__entry-role">{f.nombre}</span>}
+                  {f.descripcion && <p className="cv-ref__para" style={{ marginTop: 2 }}>{f.descripcion}</p>}
+                </div>
+              ))}
+            </Section>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+// ── Sub-components ───────────────────────────────────────────────────────
+
+function Section({ title, children, accent }: { title: string; children: React.ReactNode; accent?: boolean }) {
+  return (
+    <div className={`cv-ref__section ${accent ? "cv-ref__section--accent" : ""}`}>
+      <h2 className="cv-ref__section-title">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+function ExperienceEntry({ exp }: { exp: Experience }) {
+  const fechaInicio = formatDate(exp.fecha_inicio);
+  const fechaFin = formatDate(exp.fecha_fin);
+
+  return (
+    <div className="cv-ref__entry">
+      <div className="cv-ref__entry-head">
+        <div className="cv-ref__entry-main">
+          {exp.puesto && <span className="cv-ref__entry-role">{exp.puesto}</span>}
+          {exp.empresa && (
+            <>
+              {" "}
+              <span className="cv-ref__entry-org">— {exp.empresa}</span>
+            </>
+          )}
+        </div>
+        <div className="cv-ref__entry-aside">
+          {exp.ubicacion && <div className="cv-ref__entry-loc">{exp.ubicacion}</div>}
+          {(fechaInicio || fechaFin) && (
+            <div className="cv-ref__entry-date">
+              {fechaInicio || "?"} – {fechaFin || "Actual"}
+            </div>
+          )}
+        </div>
+      </div>
+      {exp.responsabilidades.length > 0 && (
+        <ul className="cv-ref__bullets">
+          {exp.responsabilidades.map((r, j) => (
+            <li key={j}>{r}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SkillRow({ label, values }: { label: string; values: string[] }) {
+  if (values.length === 0) return null;
+  return (
+    <p className="cv-ref__skills-row">
+      <span className="cv-ref__skills-label">{label}: </span>
+      <span className="cv-ref__skills-val">{values.join(", ")}</span>
+    </p>
+  );
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+function buildContactLine(meta: CVContext["meta"]): { label: string; value: string }[] {
+  const items: { label: string; value: string }[] = [];
+  if (meta.contacto.telefono.trim()) items.push({ label: "", value: meta.contacto.telefono });
+  if (meta.contacto.email.trim()) items.push({ label: "", value: meta.contacto.email });
+  if (meta.contacto.linkedin.trim()) items.push({ label: "", value: meta.contacto.linkedin });
+  if (meta.contacto.ubicacion.trim()) items.push({ label: "", value: meta.contacto.ubicacion });
+  if (meta.portafolio_url.trim()) items.push({ label: "", value: meta.portafolio_url });
+  return items;
+}
+
+function hasAnySkill(s: CVContext["habilidades"]): boolean {
+  return Boolean(
+    s.tecnicas.length || s.blandas.length || s.idiomas.length || s.tecnologias.length
+  );
+}
+
+function formatDate(d: string): string {
+  const s = d.trim();
+  if (!s) return "";
+  const parts = s.split("-");
+  if (parts.length >= 2) {
+    const meses = [
+      "ene.", "feb.", "mar.", "abr.", "may.", "jun.",
+      "jul.", "ago.", "sep.", "oct.", "nov.", "dic.",
+    ];
+    const mes = parseInt(parts[1], 10);
+    const mesLabel = meses[mes - 1] || parts[1];
+    return `${mesLabel} ${parts[0]}`;
+  }
+  return s;
+}
