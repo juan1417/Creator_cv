@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { apiGetCV, apiUpdateCV, type CV } from "../lib/api";
-import { parseContext, emptyContext, type CVContext } from "../types/cv";
+import { parseContext, emptyContext, type CVContext, type CVSettings } from "../types/cv";
 import { CVRenderer } from "../components/CVRenderer";
 import { useDebouncedAutoSave, type SaveStatus } from "../hooks/useDebouncedAutoSave";
 import { HeaderSection } from "../components/editor/sections/HeaderSection";
@@ -46,15 +46,13 @@ export function EditorPage() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"editor" | "preview" | "settings">("editor");
 
-  // Settings state
-  const [template, setTemplate] = useState("minimal");
-  const [accentColor, setAccentColor] = useState("#0071e3");
-  const [fontDisplay, setFontDisplay] = useState("system");
-  const [fontSize, setFontSize] = useState("14");
-  const [lineHeight, setLineHeight] = useState("1.5");
-  const [visibleSections, setVisibleSections] = useState<Record<string, boolean>>({
-    summary: true, experience: true, education: true, skills: true, projects: true,
-  });
+  // Settings — derived from ctx.settings (persisted in context_json)
+  const settings: CVSettings = ctx.settings;
+  const updateSettings = (patch: Partial<CVSettings>) =>
+    setCtx((p) => ({ ...p, settings: { ...p.settings, ...patch } }));
+  const updateVisibleSections = (key: string) =>
+    updateSettings({ visibleSections: { ...settings.visibleSections, [key]: !settings.visibleSections[key] } });
+
   const [previewZoom, setPreviewZoom] = useState(1);
 
   // AI Panel
@@ -139,10 +137,6 @@ export function EditorPage() {
     setAiInput("");
   };
 
-  const toggleSection = (key: string) => {
-    setVisibleSections((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
   if (loading) return <div className="content"><p className="empty-state">Cargando CV…</p></div>;
   if (!cv) return <div className="content"><p className="empty-state">CV no encontrado.</p><Link to="/" className="btn btn-primary">Volver</Link></div>;
 
@@ -211,7 +205,7 @@ export function EditorPage() {
               </div>
               <div className="preview-scroll">
                 <div className="preview-page" style={{ transform: `scale(${previewZoom})` }}>
-                  <CVRenderer cv={{ ...cv, context_json: ctxJson }} />
+                  <CVRenderer cv={{ ...cv, context_json: ctxJson }} settings={settings} />
                 </div>
               </div>
             </div>
@@ -227,7 +221,7 @@ export function EditorPage() {
                   <div className="section-card">
                     <div className="template-grid">
                       {TEMPLATES.map((t) => (
-                        <div key={t.id} className={`template-card${template === t.id ? " active" : ""}`} onClick={() => setTemplate(t.id)}>
+                        <div key={t.id} className={`template-card${settings.template === t.id ? " active" : ""}`} onClick={() => updateSettings({ template: t.id as CVSettings["template"] })}>
                           <div className="template-preview">
                             <div className="tp-minimal">
                               <div className="tp-bar tp-bar-full" />
@@ -249,7 +243,7 @@ export function EditorPage() {
                   <div className="section-card">
                     <div className="color-grid">
                       {COLORS.map((c) => (
-                        <button key={c} className={`color-swatch${accentColor === c ? " active" : ""}`} style={{ "--sw": c } as React.CSSProperties} onClick={() => setAccentColor(c)} aria-label={c} />
+                        <button key={c} className={`color-swatch${settings.accentColor === c ? " active" : ""}`} style={{ "--sw": c } as React.CSSProperties} onClick={() => updateSettings({ accentColor: c })} aria-label={c} />
                       ))}
                     </div>
                   </div>
@@ -261,13 +255,13 @@ export function EditorPage() {
                   <div className="section-card">
                     <div className="form-group">
                       <label className="form-label">Fuente del título</label>
-                      <select className="form-input" value={fontDisplay} onChange={(e) => setFontDisplay(e.target.value)}>
+                      <select className="form-input" value={settings.fontFamily} onChange={(e) => updateSettings({ fontFamily: e.target.value })}>
                         {FONTS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
                       </select>
                     </div>
                     <div className="form-group">
                       <label className="form-label">Tamaño base</label>
-                      <select className="form-input" value={fontSize} onChange={(e) => setFontSize(e.target.value)}>
+                      <select className="form-input" value={settings.fontSize} onChange={(e) => updateSettings({ fontSize: e.target.value })}>
                         <option value="13">Pequeño (13px)</option>
                         <option value="14">Normal (14px)</option>
                         <option value="15">Grande (15px)</option>
@@ -276,7 +270,7 @@ export function EditorPage() {
                     </div>
                     <div className="form-group">
                       <label className="form-label">Interlineado</label>
-                      <select className="form-input" value={lineHeight} onChange={(e) => setLineHeight(e.target.value)}>
+                      <select className="form-input" value={settings.lineHeight} onChange={(e) => updateSettings({ lineHeight: e.target.value })}>
                         <option value="1.4">Compacto</option>
                         <option value="1.5">Normal</option>
                         <option value="1.6">Espaciado</option>
@@ -293,7 +287,7 @@ export function EditorPage() {
                     <div className="section-toggles">
                       {SECTIONS.map((s) => (
                         <label key={s.key} className="section-toggle">
-                          <input type="checkbox" checked={visibleSections[s.key]} onChange={() => toggleSection(s.key)} />
+                          <input type="checkbox" checked={settings.visibleSections[s.key]} onChange={() => updateVisibleSections(s.key)} />
                           <span className="toggle-slider" />
                           <span className="toggle-label">{s.label}</span>
                         </label>

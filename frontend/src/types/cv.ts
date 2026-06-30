@@ -74,8 +74,18 @@ export interface Restricciones {
   otro: string;
 }
 
+export interface CVSettings {
+  template: "minimal" | "professional" | "creative";
+  accentColor: string;
+  fontFamily: string;
+  fontSize: string;
+  lineHeight: string;
+  visibleSections: Record<string, boolean>;
+}
+
 export interface CVContext {
   meta: CVMeta;
+  settings: CVSettings;
   certificaciones: Certification[];
   fortalezas: Fortaleza[];
   perfil_profesional: CVProfile;
@@ -164,9 +174,27 @@ export function emptyRestricciones(): Restricciones {
   };
 }
 
+export function emptySettings(): CVSettings {
+  return {
+    template: "minimal",
+    accentColor: "#0071e3",
+    fontFamily: "system",
+    fontSize: "14",
+    lineHeight: "1.5",
+    visibleSections: {
+      summary: true,
+      experience: true,
+      education: true,
+      skills: true,
+      projects: true,
+    },
+  };
+}
+
 export function emptyContext(): CVContext {
   return {
     meta: emptyMeta(),
+    settings: emptySettings(),
     certificaciones: [],
     fortalezas: [],
     perfil_profesional: emptyProfile(),
@@ -294,8 +322,26 @@ export function parseContext(raw: string): CVContext {
     otro: str(restr.otro),
   };
 
+  const s = (obj.settings as Record<string, unknown> | undefined) ?? {};
+  const vs = (s.visibleSections as Record<string, unknown> | undefined) ?? {};
+  const settings: CVSettings = {
+    template: (str(s.template) as CVSettings["template"]) || "minimal",
+    accentColor: str(s.accentColor) || "#0071e3",
+    fontFamily: str(s.fontFamily) || "system",
+    fontSize: str(s.fontSize) || "14",
+    lineHeight: str(s.lineHeight) || "1.5",
+    visibleSections: {
+      summary: vs.summary !== false,
+      experience: vs.experience !== false,
+      education: vs.education !== false,
+      skills: vs.skills !== false,
+      projects: vs.projects !== false,
+    },
+  };
+
   return {
     meta,
+    settings,
     certificaciones,
     fortalezas,
     perfil_profesional,

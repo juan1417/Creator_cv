@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CV } from "../lib/api";
-import { parseContext, type CVContext, type Experience } from "../types/cv";
+import { parseContext, type CVContext, type CVSettings, type Experience } from "../types/cv";
 
 interface CVRendererProps {
   cv: CV;
+  settings?: CVSettings;
   /** Modo "mini" para thumbnails en el dashboard. */
   mini?: boolean;
 }
@@ -12,17 +13,35 @@ interface CVRendererProps {
 const A4_WIDTH_PX = 793.7;
 
 /** Renderiza el CV en hoja A4 (blanca). Fuente única de verdad para preview + thumbnails. */
-export function CVRenderer({ cv, mini = false }: CVRendererProps) {
+export function CVRenderer({ cv, settings, mini = false }: CVRendererProps) {
   const data: CVContext = useMemo(() => parseContext(cv.context_json), [cv.context_json]);
+
+  const style: React.CSSProperties = useMemo(() => {
+    if (!settings) return {};
+    const fontMap: Record<string, string> = {
+      system: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif',
+      georgia: 'Georgia, "Times New Roman", serif',
+      garamond: '"EB Garamond", Garamond, serif',
+      helvetica: 'Helvetica, Arial, sans-serif',
+    };
+    return {
+      "--cv-accent": settings.accentColor,
+      "--cv-font": fontMap[settings.fontFamily] || fontMap.system,
+      "--cv-font-size": `${settings.fontSize}px`,
+      "--cv-line-height": settings.lineHeight,
+    } as React.CSSProperties;
+  }, [settings]);
 
   if (mini) {
     return <Thumbnail data={data} />;
   }
 
+  const vs = settings?.visibleSections;
+
   return (
-    <div className="cv-paper">
+    <div className="cv-paper" style={style}>
       <div className="cv-ref">
-        <CVBody data={data} />
+        <CVBody data={data} visibleSections={vs} />
       </div>
     </div>
   );
@@ -60,13 +79,14 @@ function Thumbnail({ data }: { data: CVContext }) {
   );
 }
 
-function CVBody({ data }: { data: CVContext }) {
+function CVBody({ data, visibleSections }: { data: CVContext; visibleSections?: Record<string, boolean> }) {
   const m = data.meta;
   const nombre = m.nombre_completo.trim();
   const tituloProf = m.titulo_profesional.trim();
   const contactLine = buildContactLine(m);
 
   const resumen = m.objetivo_cv.trim();
+  const show = (key: string) => !visibleSections || visibleSections[key] !== false;
 
   return (
     <>
@@ -91,14 +111,14 @@ function CVBody({ data }: { data: CVContext }) {
       )}
 
       {/* Perfil Profesional */}
-      {resumen && (
+      {show("summary") && resumen && (
         <Section title="Perfil Profesional">
           <p className="cv-ref__para">{resumen}</p>
         </Section>
       )}
 
       {/* Experiencia */}
-      {data.experiencia.length > 0 && (
+      {show("experience") && data.experiencia.length > 0 && (
         <Section title="Experiencia">
           {data.experiencia.map((exp, i) => (
             <ExperienceEntry key={i} exp={exp} />
@@ -107,7 +127,7 @@ function CVBody({ data }: { data: CVContext }) {
       )}
 
       {/* Habilidades */}
-      {hasAnySkill(data.habilidades) && (
+      {show("skills") && hasAnySkill(data.habilidades) && (
         <Section title="Habilidades">
           <SkillRow label="Técnicas" values={data.habilidades.tecnicas} />
           <SkillRow label="Habilidades Blandas" values={data.habilidades.blandas} />
@@ -117,7 +137,7 @@ function CVBody({ data }: { data: CVContext }) {
       )}
 
       {/* Educación y Certificaciones */}
-      {(data.educacion.length > 0 || data.certificaciones.length > 0) && (
+      {show("education") && (data.educacion.length > 0 || data.certificaciones.length > 0) && (
         <Section title="Educación y Certificaciones">
           {data.educacion.map((edu, i) => (
             <div key={`edu-${i}`} className="cv-ref__entry">
@@ -153,7 +173,7 @@ function CVBody({ data }: { data: CVContext }) {
       )}
 
       {/* Proyectos */}
-      {data.proyectos.length > 0 && (
+      {show("projects") && data.proyectos.length > 0 && (
         <Section title="Proyectos">
           {data.proyectos.map((proj, i) => (
             <div key={i} className="cv-ref__entry">
