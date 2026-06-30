@@ -1,5 +1,5 @@
+import { useState } from "react";
 import { emptyEducation, type Education } from "../../../types/cv";
-import { DateInput, TextField, TextAreaField } from "./_form";
 
 interface EducationSectionProps {
   value: Education[];
@@ -7,78 +7,68 @@ interface EducationSectionProps {
 }
 
 export function EducationSection({ value, onChange }: EducationSectionProps) {
+  const [editing, setEditing] = useState<number | null>(null);
+
   const update = (i: number, patch: Partial<Education>) => {
     const next = value.map((e, idx) => (idx === i ? { ...e, ...patch } : e));
     onChange(next);
   };
-  const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
-  const add = () => onChange([...value, emptyEducation()]);
+  const remove = (i: number) => {
+    onChange(value.filter((_, idx) => idx !== i));
+    if (editing === i) setEditing(null);
+  };
+  const add = () => {
+    onChange([...value, emptyEducation()]);
+    setEditing(value.length);
+  };
 
   return (
-    <section className="editor-section">
-      <div className="editor-section__head">
-        <h3 className="editor-section__title">Educación</h3>
-        <button type="button" className="btn btn-secondary btn-compact" onClick={add}>
-          + Agregar
-        </button>
+    <div className="section-group">
+      <div className="section-group-header">
+        <div className="section-group-title">Educación</div>
+        <button className="btn btn-s btn-sm" type="button" onClick={add}>+ Agregar</button>
       </div>
-
-      {value.length === 0 ? (
-        <p className="help">Sin entradas.</p>
-      ) : (
-        <ul className="entry-list">
-          {value.map((edu, i) => (
-            <li key={i} className="entry-card">
-              <div className="entry-card__head">
-                <strong className="entry-card__title">
-                  {edu.titulo || "(sin título)"}
-                </strong>
-                <button
-                  type="button"
-                  className="btn btn-danger btn-compact"
-                  onClick={() => remove(i)}
-                  aria-label={`Eliminar educación ${i + 1}`}
-                >
-                  Eliminar
-                </button>
-              </div>
-
-              <div className="form-stack" style={{ marginTop: 12 }}>
-                <div className="form-row">
-                  <TextField
-                    label="Título"
-                    htmlFor={`edu-${i}-titulo`}
-                    value={edu.titulo}
-                    onChange={(v) => update(i, { titulo: v })}
-                    placeholder="Ingeniería en Sistemas"
-                  />
-                  <TextField
-                    label="Institución"
-                    htmlFor={`edu-${i}-institucion`}
-                    value={edu.institucion}
-                    onChange={(v) => update(i, { institucion: v })}
-                    placeholder="UBA"
-                  />
-                  <DateInput
-                    label="Año de graduación"
-                    htmlFor={`edu-${i}-fin`}
-                    value={edu.fecha_fin}
-                    onChange={(v) => update(i, { fecha_fin: v })}
-                  />
+      <div className="section-card">
+        {value.length === 0 ? (
+          <p style={{ color: "var(--muted)", fontSize: 13 }}>Sin entradas.</p>
+        ) : (
+          value.map((edu, i) => (
+            <div key={i} className="cv-item" onClick={() => setEditing(editing === i ? null : i)}>
+              <div className="cv-item-header">
+                <div>
+                  <div className="cv-item-title">{edu.titulo || "(sin título)"}</div>
+                  <div className="cv-item-subtitle">{edu.institucion}</div>
+                  <div className="cv-item-date">{edu.fecha_fin}</div>
                 </div>
-                <TextAreaField
-                  label="Descripción (opcional)"
-                  htmlFor={`edu-${i}-desc`}
-                  value={edu.descripcion}
-                  onChange={(v) => update(i, { descripcion: v })}
-                  placeholder="Tesis, mención, promedio…"
-                  rows={2}
-                />
+                <div className="cv-item-actions">
+                  <button className="cv-item-btn" title="Editar" type="button" onClick={(e) => { e.stopPropagation(); setEditing(editing === i ? null : i); }}>✎</button>
+                  <button className="cv-item-btn" title="Eliminar" type="button" onClick={(e) => { e.stopPropagation(); remove(i); }}>✕</button>
+                </div>
               </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+              {editing === i && (
+                <div className="form-row" style={{ marginTop: 12 }} onClick={(e) => e.stopPropagation()}>
+                  <div className="form-group">
+                    <label className="form-label">Título</label>
+                    <input className="form-input" type="text" value={edu.titulo} onChange={(e) => update(i, { titulo: e.target.value })} placeholder="Ingeniería en Sistemas" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Institución</label>
+                    <input className="form-input" type="text" value={edu.institucion} onChange={(e) => update(i, { institucion: e.target.value })} placeholder="UBA" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Año de graduación</label>
+                    <input className="form-input" type="month" value={edu.fecha_fin} onChange={(e) => update(i, { fecha_fin: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Descripción (opcional)</label>
+                    <textarea className="form-input form-textarea" rows={2} value={edu.descripcion} onChange={(e) => update(i, { descripcion: e.target.value })} placeholder="Tesis, mención, promedio…" />
+                  </div>
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   );
 }

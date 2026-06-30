@@ -66,7 +66,7 @@ function CVBody({ data }: { data: CVContext }) {
   const tituloProf = m.titulo_profesional.trim();
   const contactLine = buildContactLine(m);
 
-  const resumen = data.perfil_profesional.resumen.trim();
+  const resumen = m.objetivo_cv.trim();
 
   return (
     <>

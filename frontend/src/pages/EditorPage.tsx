@@ -5,7 +5,6 @@ import { parseContext, emptyContext, type CVContext } from "../types/cv";
 import { CVRenderer } from "../components/CVRenderer";
 import { useDebouncedAutoSave, type SaveStatus } from "../hooks/useDebouncedAutoSave";
 import { HeaderSection } from "../components/editor/sections/HeaderSection";
-import { ProfileSection } from "../components/editor/sections/ProfileSection";
 import { ExperienceSection } from "../components/editor/sections/ExperienceSection";
 import { EducationSection } from "../components/editor/sections/EducationSection";
 import { SkillsSection } from "../components/editor/sections/SkillsSection";
@@ -142,20 +141,7 @@ export function EditorPage() {
               {error && <div className="flash flash-error" style={{ marginBottom: 16 }}>{error}</div>}
               {saveError && <div className="flash flash-error" style={{ marginBottom: 16 }}>Error al guardar: {saveError}</div>}
 
-              <div className="section-group">
-                <div className="section-group-header">
-                  <div className="section-group-title">Título del CV</div>
-                </div>
-                <div className="section-card">
-                  <div className="form-group">
-                    <label htmlFor="cv-title" className="form-label">Título</label>
-                    <input id="cv-title" type="text" className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} onBlur={handleTitleBlur} required />
-                  </div>
-                </div>
-              </div>
-
               <HeaderSection value={ctx.meta} onChange={(meta) => setCtx((p) => ({ ...p, meta }))} />
-              <ProfileSection value={ctx.perfil_profesional} onChange={(perfil_profesional) => setCtx((p) => ({ ...p, perfil_profesional }))} />
               <ExperienceSection value={ctx.experiencia} onChange={(experiencia) => setCtx((p) => ({ ...p, experiencia }))} />
               <EducationSection value={ctx.educacion} onChange={(educacion) => setCtx((p) => ({ ...p, educacion }))} />
               <SkillsSection value={ctx.habilidades} onChange={(habilidades) => setCtx((p) => ({ ...p, habilidades }))} />

@@ -1,5 +1,5 @@
+import { useState } from "react";
 import type { Skills } from "../../../types/cv";
-import { TagInput } from "./_form";
 
 interface SkillsSectionProps {
   value: Skills;
@@ -7,39 +7,63 @@ interface SkillsSectionProps {
 }
 
 export function SkillsSection({ value, onChange }: SkillsSectionProps) {
-  const update = <K extends keyof Skills>(key: K, v: Skills[K]) =>
-    onChange({ ...value, [key]: v });
+  const [input, setInput] = useState("");
+
+  const allSkills = [
+    ...value.tecnicas,
+    ...value.blandas,
+    ...value.idiomas,
+    ...value.tecnologias,
+  ];
+
+  const addSkill = (raw: string) => {
+    const v = raw.trim();
+    if (!v || allSkills.includes(v)) return;
+    onChange({ ...value, tecnicas: [...value.tecnicas, v] });
+  };
+
+  const removeSkill = (v: string) => {
+    const remove = (arr: string[]) => arr.filter((x) => x !== v);
+    onChange({
+      ...value,
+      tecnicas: remove(value.tecnicas),
+      blandas: remove(value.blandas),
+      idiomas: remove(value.idiomas),
+      tecnologias: remove(value.tecnologias),
+    });
+  };
 
   return (
-    <section className="editor-section">
-      <h3 className="editor-section__title">Habilidades</h3>
-
-      <div className="form-stack">
-        <TagInput
-          label="Técnicas"
-          values={value.tecnicas}
-          onChange={(tecnicas) => update("tecnicas", tecnicas)}
-          placeholder="Python, SQL, AWS…"
-        />
-        <TagInput
-          label="Habilidades blandas"
-          values={value.blandas}
-          onChange={(blandas) => update("blandas", blandas)}
-          placeholder="Comunicación, liderazgo…"
-        />
-        <TagInput
-          label="Idiomas"
-          values={value.idiomas}
-          onChange={(idiomas) => update("idiomas", idiomas)}
-          placeholder="Español (nativo), Inglés (avanzado)…"
-        />
-        <TagInput
-          label="Tecnologías / herramientas"
-          values={value.tecnologias}
-          onChange={(tecnologias) => update("tecnologias", tecnologias)}
-          placeholder="React, Postgres, Docker, Git…"
-        />
+    <div className="section-group">
+      <div className="section-group-header">
+        <div className="section-group-title">Habilidades</div>
+        <button className="btn-ghost" type="button">✦ Mejorar con AI</button>
       </div>
-    </section>
+      <div className="section-card">
+        <div className="skills-wrap">
+          {allSkills.map((skill) => (
+            <span key={skill} className="skill-tag">
+              {skill}
+              <button className="skill-tag-remove" type="button" onClick={() => removeSkill(skill)} aria-label={`Eliminar ${skill}`}>✕</button>
+            </span>
+          ))}
+          <input
+            type="text"
+            className="skill-add"
+            placeholder="+ Agregar habilidad"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === ",") {
+                e.preventDefault();
+                addSkill(input);
+                setInput("");
+              }
+            }}
+            onBlur={() => { if (input.trim()) { addSkill(input); setInput(""); } }}
+          />
+        </div>
+      </div>
+    </div>
   );
 }

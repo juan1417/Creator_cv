@@ -5,8 +5,8 @@ export interface CVMeta {
   titulo_profesional: string;
   idioma_cv: string;
   objetivo_cv: string;
-  tipo_cv: string;
-  nivel_seniority: string;
+  portafolio_url: string;
+  portafolio_descripcion: string;
   contacto: {
     telefono: string;
     email: string;
@@ -100,8 +100,8 @@ export function emptyMeta(): CVMeta {
     titulo_profesional: "",
     idioma_cv: "español",
     objetivo_cv: "",
-    tipo_cv: "",
-    nivel_seniority: "",
+    portafolio_url: "",
+    portafolio_descripcion: "",
     contacto: emptyContact(),
   };
 }
@@ -205,8 +205,8 @@ export function parseContext(raw: string): CVContext {
     titulo_profesional: str(m.titulo_profesional),
     idioma_cv: str(m.idioma_cv) || "español",
     objetivo_cv: str(m.objetivo_cv),
-    tipo_cv: str(m.tipo_cv),
-    nivel_seniority: str(m.nivel_seniority),
+    portafolio_url: str(m.portafolio_url),
+    portafolio_descripcion: str(m.portafolio_descripcion),
     contacto: {
       telefono: str(contacto.telefono),
       email: str(contacto.email),

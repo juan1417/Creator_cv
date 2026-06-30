@@ -19,8 +19,6 @@ export interface CVTemplate {
 function classicContext(): CVContext {
   const ctx = emptyContext();
   ctx.meta.idioma_cv = "español";
-  ctx.meta.tipo_cv = "tradicional";
-  ctx.meta.nivel_seniority = "semi-senior";
   ctx.restricciones = {
     extension_maxima_paginas: 2,
     formato_solicitado: "PDF",
@@ -32,14 +30,11 @@ function classicContext(): CVContext {
 function modernContext(): CVContext {
   const ctx = emptyContext();
   ctx.meta.idioma_cv = "español";
-  ctx.meta.tipo_cv = "moderno";
-  ctx.meta.nivel_seniority = "senior";
   ctx.restricciones = {
     extension_maxima_paginas: 2,
     formato_solicitado: "PDF",
     otro: "",
   };
-  // Placeholders de muestra — el usuario los completa
   ctx.experiencia = [emptyExperience()];
   ctx.educacion = [emptyEducation()];
   return ctx;
