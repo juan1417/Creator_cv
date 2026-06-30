@@ -75,11 +75,11 @@ export interface Restricciones {
 }
 
 export interface CVSettings {
-  template: "minimal" | "professional" | "creative";
+  template: "blank" | "minimal" | "professional" | "modern" | "executive" | "creative" | "academic";
   accentColor: string;
   fontFamily: string;
-  fontSize: string;
-  lineHeight: string;
+  fontSize: number;
+  lineHeight: number;
   visibleSections: Record<string, boolean>;
 }
 
@@ -179,8 +179,8 @@ export function emptySettings(): CVSettings {
     template: "minimal",
     accentColor: "#0071e3",
     fontFamily: "system",
-    fontSize: "14",
-    lineHeight: "1.5",
+    fontSize: 14,
+    lineHeight: 1.5,
     visibleSections: {
       summary: true,
       experience: true,
@@ -326,8 +326,8 @@ export function parseContext(raw: string): CVContext {
     template: (str(s.template) as CVSettings["template"]) || "minimal",
     accentColor: str(s.accentColor) || "#0071e3",
     fontFamily: str(s.fontFamily) || "system",
-    fontSize: str(s.fontSize) || "14",
-    lineHeight: str(s.lineHeight) || "1.5",
+    fontSize: Number(s.fontSize) || 14,
+    lineHeight: Number(s.lineHeight) || 1.5,
     visibleSections: {
       summary: vs.summary !== false,
       experience: vs.experience !== false,

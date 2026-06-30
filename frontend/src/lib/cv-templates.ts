@@ -1,4 +1,4 @@
-/** Templates de CV para el wizard de "Nuevo CV". Solo constantes — sin backend. */
+/** Templates de CV — fuente única de verdad para TemplatesPage, EditorPage y creación. */
 
 import {
   emptyContext,
@@ -7,16 +7,24 @@ import {
   type CVContext,
 } from "../types/cv";
 
-export type TemplateId = "blank" | "classic" | "modern";
+export type TemplateId =
+  | "blank"
+  | "minimal"
+  | "professional"
+  | "modern"
+  | "executive"
+  | "creative"
+  | "academic";
 
 export interface CVTemplate {
   id: TemplateId;
   name: string;
   description: string;
+  tags: string[];
   context: CVContext;
 }
 
-function classicContext(): CVContext {
+function baseCtx(): CVContext {
   const ctx = emptyContext();
   ctx.meta.idioma_cv = "español";
   ctx.restricciones = {
@@ -27,16 +35,43 @@ function classicContext(): CVContext {
   return ctx;
 }
 
-function modernContext(): CVContext {
-  const ctx = emptyContext();
-  ctx.meta.idioma_cv = "español";
-  ctx.restricciones = {
-    extension_maxima_paginas: 2,
-    formato_solicitado: "PDF",
-    otro: "",
-  };
+function minimalCtx(): CVContext {
+  return baseCtx();
+}
+
+function professionalCtx(): CVContext {
+  const ctx = baseCtx();
   ctx.experiencia = [emptyExperience()];
   ctx.educacion = [emptyEducation()];
+  return ctx;
+}
+
+function modernCtx(): CVContext {
+  const ctx = baseCtx();
+  ctx.experiencia = [emptyExperience()];
+  ctx.educacion = [emptyEducation()];
+  ctx.perfil_profesional.resumen = "";
+  return ctx;
+}
+
+function executiveCtx(): CVContext {
+  const ctx = baseCtx();
+  ctx.experiencia = [emptyExperience(), emptyExperience()];
+  ctx.educacion = [emptyEducation()];
+  return ctx;
+}
+
+function creativeCtx(): CVContext {
+  const ctx = baseCtx();
+  ctx.experiencia = [emptyExperience()];
+  ctx.educacion = [emptyEducation()];
+  return ctx;
+}
+
+function academicCtx(): CVContext {
+  const ctx = baseCtx();
+  ctx.educacion = [emptyEducation()];
+  ctx.certificaciones = [{ nombre: "", institucion: "", fecha: "" }];
   return ctx;
 }
 
@@ -45,19 +80,50 @@ export const TEMPLATES: Record<TemplateId, CVTemplate> = {
     id: "blank",
     name: "En blanco",
     description: "Empezás desde cero. Ideal si querés control total.",
+    tags: ["Personalizado"],
     context: emptyContext(),
   },
-  classic: {
-    id: "classic",
-    name: "Clásico",
-    description: "CV tradicional en español, 2 páginas. Para roles formales.",
-    context: classicContext(),
+  minimal: {
+    id: "minimal",
+    name: "Minimal",
+    description: "Limpio y profesional. Ideal para roles corporativos.",
+    tags: ["Corporativo", "ATS-friendly"],
+    context: minimalCtx(),
+  },
+  professional: {
+    id: "professional",
+    name: "Profesional",
+    description: "CV tradicional con experiencia y educación pre-cargadas.",
+    tags: ["Tradicional", "Formal"],
+    context: professionalCtx(),
   },
   modern: {
     id: "modern",
     name: "Moderno",
     description: "Orientado a tecnología, con secciones de proyectos y skills.",
-    context: modernContext(),
+    tags: ["Tech", "Startups"],
+    context: modernCtx(),
+  },
+  executive: {
+    id: "executive",
+    name: "Executive",
+    description: "Formal y elegante para posiciones senior o directivas.",
+    tags: ["Senior", "C-Suite"],
+    context: executiveCtx(),
+  },
+  creative: {
+    id: "creative",
+    name: "Creative",
+    description: "Para diseñadores y roles creativos. Más libertad visual.",
+    tags: ["Diseño", "Portfolio"],
+    context: creativeCtx(),
+  },
+  academic: {
+    id: "academic",
+    name: "Academic",
+    description: "Para roles académicos, investigación y publicaciones.",
+    tags: ["Investigación", "Universidad"],
+    context: academicCtx(),
   },
 };
 

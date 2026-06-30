@@ -10,12 +10,7 @@ import { EducationSection } from "../components/editor/sections/EducationSection
 import { SkillsSection } from "../components/editor/sections/SkillsSection";
 import { ProjectsSection } from "../components/editor/sections/ProjectsSection";
 import { AdditionalSection } from "../components/editor/sections/AdditionalSection";
-
-const TEMPLATES = [
-  { id: "minimal", name: "Minimal" },
-  { id: "professional", name: "Profesional" },
-  { id: "creative", name: "Creativo" },
-];
+import { TEMPLATES } from "../lib/cv-templates";
 
 const COLORS = ["#0071e3", "#000000", "#6e6e73", "#34c759", "#ff9500", "#ff3b30", "#af52de", "#5856d6"];
 
@@ -220,7 +215,7 @@ export function EditorPage() {
                   <div className="section-group-header"><div className="section-group-title">Plantilla</div></div>
                   <div className="section-card">
                     <div className="template-grid">
-                      {TEMPLATES.map((t) => (
+                      {Object.values(TEMPLATES).map((t) => (
                         <div key={t.id} className={`template-card${settings.template === t.id ? " active" : ""}`} onClick={() => updateSettings({ template: t.id as CVSettings["template"] })}>
                           <div className="template-preview">
                             <div className="tp-minimal">
@@ -261,20 +256,20 @@ export function EditorPage() {
                     </div>
                     <div className="form-group">
                       <label className="form-label">Tamaño base</label>
-                      <select className="form-input" value={settings.fontSize} onChange={(e) => updateSettings({ fontSize: e.target.value })}>
-                        <option value="13">Pequeño (13px)</option>
-                        <option value="14">Normal (14px)</option>
-                        <option value="15">Grande (15px)</option>
-                        <option value="16">Extra grande (16px)</option>
+                      <select className="form-input" value={settings.fontSize} onChange={(e) => updateSettings({ fontSize: Number(e.target.value) })}>
+                        <option value={13}>Pequeño (13px)</option>
+                        <option value={14}>Normal (14px)</option>
+                        <option value={15}>Grande (15px)</option>
+                        <option value={16}>Extra grande (16px)</option>
                       </select>
                     </div>
                     <div className="form-group">
                       <label className="form-label">Interlineado</label>
-                      <select className="form-input" value={settings.lineHeight} onChange={(e) => updateSettings({ lineHeight: e.target.value })}>
-                        <option value="1.4">Compacto</option>
-                        <option value="1.5">Normal</option>
-                        <option value="1.6">Espaciado</option>
-                        <option value="1.8">Amplio</option>
+                      <select className="form-input" value={settings.lineHeight} onChange={(e) => updateSettings({ lineHeight: Number(e.target.value) })}>
+                        <option value={1.4}>Compacto</option>
+                        <option value={1.5}>Normal</option>
+                        <option value={1.6}>Espaciado</option>
+                        <option value={1.8}>Amplio</option>
                       </select>
                     </div>
                   </div>

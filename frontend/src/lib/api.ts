@@ -352,6 +352,7 @@ export async function apiGetCV(id: string, onSessionExpired?: () => void): Promi
 
 export async function apiCreateCV(
   title: string,
+  contextJson?: string,
   onSessionExpired?: () => void
 ): Promise<CV> {
   const res = await authedFetch(
@@ -359,7 +360,7 @@ export async function apiCreateCV(
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title, context_json: contextJson }),
     },
     onSessionExpired
   );
