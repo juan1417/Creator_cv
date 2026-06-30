@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { apiGetCV, apiUpdateCV, type CV } from "../lib/api";
+import { apiGetCV, apiUpdateCV, apiChatAI, apiGetChat, apiClearChat, type CV, type CVPatch } from "../lib/api";
 import { parseContext, emptyContext, type CVContext, type CVSettings } from "../types/cv";
 import { CVRenderer } from "../components/CVRenderer";
 import { useDebouncedAutoSave, type SaveStatus } from "../hooks/useDebouncedAutoSave";
@@ -29,7 +29,7 @@ const SECTIONS = [
   { key: "projects", label: "Proyectos" },
 ];
 
-type AiMsg = { role: "ai" | "user" | "system"; content: string };
+type AiMsg = { role: "ai" | "user" | "system"; content: string; patches?: CVPatch[] };
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -51,11 +51,82 @@ export function EditorPage() {
   const [previewZoom, setPreviewZoom] = useState(1);
 
   // AI Panel
-  const [aiMessages, setAiMessages] = useState<AiMsg[]>([
-    { role: "system", content: "Asistente AI conectado. Puedo ayudarte a mejorar tu CV, agregar contenido o ajustar secciones específicas." },
-    { role: "ai", content: "Hola 👋 Veo que tienes un CV. ¿En qué te puedo ayudar? Puedo:\n\n• **Mejorar el resumen** profesional\n• **Reescribir descripciones** de experiencia con métricas\n• **Sugerir habilidades** relevantes para tu sector\n• **Optimizar** el CV para ATS\n\n¿Qué sección quieres que revise?" },
-  ]);
+  const [aiMessages, setAiMessages] = useState<AiMsg[]>([]);
   const [aiInput, setAiInput] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const aiEndRef = useRef<HTMLDivElement>(null);
+
+  // Load chat history on mount
+  useEffect(() => {
+    if (!id) return;
+    apiGetChat(id).then((msgs) => {
+      if (msgs.length > 0) {
+        setAiMessages(msgs.map((m) => ({ role: m.role === "assistant" ? "ai" : m.role as "user" | "ai", content: m.content })));
+      } else {
+        setAiMessages([
+          { role: "system", content: "Asistente ATS conectado. Puedo ayudarte a optimizar tu CV para sistemas de seguimiento de candidatos." },
+          { role: "ai", content: "Hola! Soy tu asistente especializado en optimizar CVs para ATS (Applicant Tracking Systems). Puedo:\n\n• **Analizar tu CV** para detectar problemas con ATS\n• **Sugerir keywords** que los buscan los reclutadores\n• **Mejorar tu resumen** profesional con verbos de accion\n• **Reescribir experiencias** con metricas concretas\n• **Revisar formato** para maxima compatibilidad\n\nQue seccion queres que revise primero?" },
+        ]);
+      }
+    }).catch(() => {
+      setAiMessages([
+        { role: "system", content: "Asistente ATS conectado." },
+        { role: "ai", content: "Hola! Puedo ayudarte a optimizar tu CV para ATS. Que seccion queres que revise?" },
+      ]);
+    });
+  }, [id]);
+
+  // Auto-scroll on new messages
+  useEffect(() => {
+    aiEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [aiMessages]);
+
+  const applyPatch = (patch: CVPatch) => {
+    setCtx((prev) => {
+      const next = { ...prev } as Record<string, unknown>;
+      const section = patch.section as string;
+      const target = next[section];
+      if (target && typeof target === "object" && !Array.isArray(target)) {
+        (target as Record<string, unknown>)[patch.field] = patch.value;
+      } else if (Array.isArray(target)) {
+        const arr = [...target];
+        if (patch.action === "update" && typeof patch.index === "number" && arr[patch.index]) {
+          (arr[patch.index] as Record<string, unknown>)[patch.field] = patch.value;
+        } else if (patch.action === "add") {
+          arr.push({ [patch.field]: patch.value });
+        } else if (patch.action === "remove" && typeof patch.index === "number") {
+          arr.splice(patch.index, 1);
+        }
+        next[section] = arr;
+      }
+      return next as unknown as CVContext;
+    });
+    showToast("Cambio aplicado al CV");
+  };
+
+  const sendAi = async () => {
+    const text = aiInput.trim();
+    if (!text || !id || aiLoading) return;
+    setAiMessages((prev) => [...prev, { role: "user", content: text }]);
+    setAiInput("");
+    setAiLoading(true);
+    try {
+      const result = await apiChatAI(id, text);
+      setAiMessages((prev) => [...prev, { role: "ai", content: result.response, patches: result.patches.length > 0 ? result.patches : undefined }]);
+    } catch {
+      setAiMessages((prev) => [...prev, { role: "ai", content: "Error al conectar con la IA. Verifica que la API key de Gemini esté configurada." }]);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const ATS_SUGGESTIONS = [
+    { label: "Analizar ATS", message: "Analiza mi CV completo para ATS y dame un score de compatibilidad. Identifica problemas de formato y keywords faltantes." },
+    { label: "Sugerir keywords", message: "Que keywords deberia agregar a mi CV para mejorar el matching con ofertas de mi sector? Dame una lista concreta." },
+    { label: "Mejorar resumen", message: "Reescribi mi perfil profesional con verbos de accion, metricas y keywords relevantes para ATS. Mantene maximo 3 lineas." },
+    { label: "Mejorar experiencia", message: "Reescribi mi experiencia laboral con verbos de accion al inicio de cada bullet, metricas concretas y keywords tecnicas." },
+    { label: "Revisar formato", message: "Revisa si mi CV tiene problemas de formato para ATS: tablas, columnas, fuentes incompatibles, fechas inconsistentes." },
+  ];
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -123,13 +194,6 @@ export function EditorPage() {
   const handleTitleBlur = async () => {
     if (!id || !title.trim()) return;
     try { await apiUpdateCV(id, { title: title.trim() }); } catch { /* */ }
-  };
-
-  const sendAi = () => {
-    const text = aiInput.trim();
-    if (!text) return;
-    setAiMessages((prev) => [...prev, { role: "user", content: text }, { role: "ai", content: "Analizando tu solicitud…" }]);
-    setAiInput("");
   };
 
   if (loading) return <div className="content"><p className="empty-state">Cargando CV…</p></div>;
@@ -319,17 +383,43 @@ export function EditorPage() {
         {/* ─── AI PANEL (always visible) ─── */}
         <div className="ai-panel">
           <div className="ai-panel-header">
-            <div className="ai-panel-title">Agente AI <span className="ai-panel-badge">Activo</span></div>
-            <button className="btn btn-secondary" style={{ fontSize: 12, padding: "5px 12px" }} onClick={() => setAiMessages([])}>Limpiar</button>
+            <div className="ai-panel-title">Asistente ATS <span className="ai-panel-badge">Gemini</span></div>
+            <button className="btn btn-secondary" style={{ fontSize: 12, padding: "5px 12px" }} onClick={() => { setAiMessages([]); if (id) apiClearChat(id).catch(() => {}); }}>Limpiar</button>
           </div>
           <div className="ai-messages">
             {aiMessages.map((m, i) => (
-              <div key={i} className={`ai-msg ai-msg-${m.role}`}>{m.content}</div>
+              <div key={i} className={`ai-msg ai-msg-${m.role}`}>
+                <div dangerouslySetInnerHTML={{ __html: formatAiMessage(m.content) }} />
+                {m.patches && m.patches.length > 0 && (
+                  <div className="ai-patches">
+                    {m.patches.map((p, j) => (
+                      <button key={j} className="btn btn-primary" style={{ fontSize: 11, padding: "4px 10px", marginTop: 4 }} onClick={() => applyPatch(p)}>
+                        Aplicar: {p.section}.{p.field}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
+            {aiLoading && (
+              <div className="ai-msg ai-msg-ai ai-msg-loading">
+                <span className="ai-typing"><span /><span /><span /></span> Analizando...
+              </div>
+            )}
+            <div ref={aiEndRef} />
           </div>
+          {aiMessages.length <= 2 && (
+            <div className="ai-suggestions">
+              {ATS_SUGGESTIONS.map((s) => (
+                <button key={s.label} className="ai-suggestion" onClick={() => { setAiInput(s.message); }}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="ai-input-wrap">
-            <textarea className="ai-input" placeholder="Preguntale algo al agente AI..." rows={1} value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAi(); } }} />
-            <button className="ai-send" onClick={sendAi}>→</button>
+            <textarea className="ai-input" placeholder="Preguntale al asistente ATS..." rows={1} value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAi(); } }} disabled={aiLoading} />
+            <button className="ai-send" onClick={sendAi} disabled={aiLoading || !aiInput.trim()}>→</button>
           </div>
         </div>
       </div>
@@ -345,6 +435,15 @@ function SaveLabel({ status }: { status: SaveStatus }) {
     case "saved": return <>Guardado ✓</>;
     case "error": return <>Error al guardar</>;
   }
+}
+
+function formatAiMessage(text: string): string {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\n\n/g, "</p><p>")
+    .replace(/\n/g, "<br>")
+    .replace(/^- (.*)/gm, "• $1")
+    .replace(/^(\d+)\. (.*)/gm, "$1. $2");
 }
 
 function showToast(msg: string) {

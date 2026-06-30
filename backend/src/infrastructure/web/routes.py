@@ -112,6 +112,7 @@ def register_routes(
     get_chat: GetChat,
     append_chat: AppendChat,
     clear_chat: ClearChat,
+    chat_ai_uc=None,
     # Compare
     compare_cv=None,
     # History
@@ -380,6 +381,20 @@ def register_routes(
         get_cv.execute(g.user_id, GetCVInput(cv_id=cv_id))
         clear_chat.execute(g.user_id, cv_id)
         return jsonify({"ok": True}), 200
+
+    @api.post("/cvs/<cv_id>/chat/ai")
+    @require_auth
+    def chat_ai_route(cv_id: str):
+        if chat_ai_uc is None:
+            return jsonify({"error": "Asistente AI no disponible"}), 501
+        body = ChatAIRequest.model_validate(request.get_json(silent=True) or {})
+        get_cv.execute(g.user_id, GetCVInput(cv_id=cv_id))
+        result = chat_ai_uc.execute(g.user_id, cv_id, body.content)
+        return jsonify({
+            "ok": True,
+            "response": result.response,
+            "patches": result.patches,
+        }), 200
 
     # ── Compare ───────────────────────────────────────────────────────
     @api.post("/compare")

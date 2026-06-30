@@ -12,6 +12,7 @@ from .use_cases import (
     GetCV,
     ListCVs,
     DeleteCV,
+    DuplicateCV,
     GetChat,
     AppendChat,
     ClearChat,
@@ -23,6 +24,7 @@ from .dto import (
     ChatMessageRequest,
     ChatMessageResponse,
     CompareRequest,
+    ChatAIRequest,
 )
 
 __all__ = [
@@ -31,6 +33,7 @@ __all__ = [
     "GetCV",
     "ListCVs",
     "DeleteCV",
+    "DuplicateCV",
     "GetChat",
     "AppendChat",
     "ClearChat",
@@ -39,4 +42,5 @@ __all__ = [
     "CVResponse",
     "ChatMessageRequest",
     "ChatMessageResponse",
+    "ChatAIRequest",
 ]

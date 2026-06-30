@@ -85,6 +85,10 @@ class CompareRequest(BaseModel):
     created_at: datetime
 
 
+class ChatAIRequest(BaseModel):
+    content: str = Field(min_length=1)
+
+
 # ── Auth ──────────────────────────────────────────────────────────────────
 
 

@@ -232,6 +232,17 @@ def build_app():
     get_history_uc = GetCVHistory(history_repo)
     restore_snapshot_uc = RestoreSnapshot(history_repo)
 
+    # ── Chat AI use case ─────────────────────────────────────────────
+    chat_ai_uc = None
+    if cfg.google_api_key:
+        try:
+            from ..application.chat_ai_use_case import ChatWithAI
+            from ..infrastructure.llm.gemini_client import GeminiClient
+            gemini_chat = GeminiClient(cfg.google_api_key)
+            chat_ai_uc = ChatWithAI(chat_repo, cv_repo, gemini_chat)
+        except Exception:
+            log.exception("No se pudo inicializar ChatWithAI")
+
     # ── CV use cases with history hooks ───────────────────────────────
     create_cv_uc = CreateCV(cv_repo=cv_repo, history_recorder=history_recorder)
     get_cv_uc = GetCV(cv_repo=cv_repo)
@@ -255,6 +266,7 @@ def build_app():
         get_chat=get_chat_uc,
         append_chat=append_chat_uc,
         clear_chat=clear_chat_uc,
+        chat_ai_uc=chat_ai_uc,
         compare_cv=compare_uc,
         get_cv_history=get_history_uc,
         restore_snapshot=restore_snapshot_uc,

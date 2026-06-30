@@ -469,6 +469,38 @@ export async function apiClearChat(
   if (!res.ok) throw new Error(await res.text());
 }
 
+export interface CVPatch {
+  section: string;
+  action: string;
+  index?: number;
+  field: string;
+  value: string;
+}
+
+export interface ChatAIResult {
+  response: string;
+  patches: CVPatch[];
+}
+
+export async function apiChatAI(
+  cvId: string,
+  message: string,
+  onSessionExpired?: () => void
+): Promise<ChatAIResult> {
+  const res = await authedFetch(
+    `${BASE}/api/cvs/${cvId}/chat/ai`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: message }),
+    },
+    onSessionExpired
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const body = await res.json();
+  return { response: body.response, patches: body.patches ?? [] };
+}
+
 // ── Compare ─────────────────────────────────────────────────────────
 
 export type CompareResult = {
