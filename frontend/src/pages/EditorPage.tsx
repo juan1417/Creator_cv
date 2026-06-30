@@ -87,7 +87,20 @@ export function EditorPage() {
     await apiUpdateCV(id, { context_json: ctxJson });
   }, [id, ctxJson]);
 
-  const { status: saveStatus, error: saveError, flush } = useDebouncedAutoSave({ value: ctx, save, delay: 800 });
+  const storageKey = id ? `cv_draft_${id}` : undefined;
+  const { status: saveStatus, error: saveError, flush, restoredFromStorage } = useDebouncedAutoSave({
+    value: ctx,
+    save,
+    storageKey,
+    delay: 800,
+  });
+
+  // Si hay datos en localStorage más recientes, restaurarlos en el estado
+  useEffect(() => {
+    if (restoredFromStorage) {
+      setCtx(restoredFromStorage);
+    }
+  }, [restoredFromStorage]);
 
   // Save before tab close / refresh
   useEffect(() => {
