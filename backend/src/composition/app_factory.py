@@ -33,11 +33,13 @@ from ..application.use_cases import (
     VerifyEmail,
     VerifyTwoFactor,
 )
+from ..application.history_use_case import GetCVHistory, RestoreSnapshot
 from ..domain.repositories import (
     BackupCodeRepository,
     ChatRepository,
     CVRepository,
     EmailVerificationTokenRepository,
+    HistoryRepository,
     PasswordResetTokenRepository,
     RefreshTokenRepository,
     TwoFactorPendingRepository,
@@ -74,6 +76,7 @@ from ..infrastructure.persistence.sqlalchemy_two_factor_pending_repo import (
     SQLAlchemyTwoFactorPendingRepository,
 )
 from ..infrastructure.persistence.sqlalchemy_user_repo import SQLAlchemyUserRepository
+from ..infrastructure.persistence.sqlalchemy_history_repo import SQLAlchemyHistoryRepository
 from ..infrastructure.web.errors import register_error_handlers
 from ..infrastructure.web.flask_app import create_flask_app
 from ..infrastructure.web.limiter import register_limiter
@@ -90,6 +93,7 @@ class AppConfig:
     secret_key: str
     frontend_url: str
     skip_email_verification: bool
+    google_api_key: str
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -107,6 +111,7 @@ class AppConfig:
             or os.environ.get("SECRET_KEY", "dev-secret-key-change-in-prod"),
             frontend_url=os.environ.get("FRONTEND_URL", "http://localhost:5173").strip(),
             skip_email_verification=os.environ.get("CREATOR_CV_SKIP_EMAIL_VERIFICATION") == "1",
+            google_api_key=os.environ.get("GOOGLE_API_KEY", "").strip(),
         )
 
 
@@ -150,6 +155,7 @@ def build_app():
     twofa_pending_repo: TwoFactorPendingRepository = (
         SQLAlchemyTwoFactorPendingRepository()
     )
+    history_repo: HistoryRepository = SQLAlchemyHistoryRepository()
 
     # ── Email sender ─────────────────────────────────────────────────
     email_sender: EmailSender = get_email_sender()
@@ -207,18 +213,51 @@ def build_app():
         user_repo, backup_repo, password_verifier=verify_password
     )
 
+    # ── LLM Client ────────────────────────────────────────────────────
+    compare_uc = None
+    if cfg.google_api_key:
+        try:
+            from ..infrastructure.llm.gemini_client import GeminiClient
+            from ..application.compare_use_case import CompareCVWithOffer
+
+            gemini = GeminiClient(cfg.google_api_key)
+            compare_uc = CompareCVWithOffer(gemini)
+            log.info("LLM: Gemini client configurado")
+        except Exception:
+            log.exception("No se pudo inicializar Gemini client")
+
+    # ── History use cases ─────────────────────────────────────────────
+    from ..application.history_use_case import RecordHistoryEntry, GetCVHistory, RestoreSnapshot
+    history_recorder = RecordHistoryEntry(history_repo)
+    get_history_uc = GetCVHistory(history_repo)
+    restore_snapshot_uc = RestoreSnapshot(history_repo)
+
+    # ── CV use cases with history hooks ───────────────────────────────
+    create_cv_uc = CreateCV(cv_repo=cv_repo, history_recorder=history_recorder)
+    get_cv_uc = GetCV(cv_repo=cv_repo)
+    list_cvs_uc = ListCVs(cv_repo=cv_repo)
+    update_cv_uc = UpdateCV(cv_repo=cv_repo, history_recorder=history_recorder)
+    delete_cv_uc = DeleteCV(cv_repo=cv_repo)
+    duplicate_cv_uc = DuplicateCV(cv_repo=cv_repo, history_recorder=history_recorder)
+    get_chat_uc = GetChat(chat_repo)
+    append_chat_uc = AppendChat(chat_repo)
+    clear_chat_uc = ClearChat(chat_repo)
+
     # ── Rutas ────────────────────────────────────────────────────────
     register_routes(
         app,
-        create_cv=CreateCV(cv_repo),
-        get_cv=GetCV(cv_repo),
-        list_cvs=ListCVs(cv_repo),
-        update_cv=UpdateCV(cv_repo),
-        delete_cv=DeleteCV(cv_repo),
-        duplicate_cv=DuplicateCV(cv_repo),
-        get_chat=GetChat(chat_repo),
-        append_chat=AppendChat(chat_repo),
-        clear_chat=ClearChat(chat_repo),
+        create_cv=create_cv_uc,
+        get_cv=get_cv_uc,
+        list_cvs=list_cvs_uc,
+        update_cv=update_cv_uc,
+        delete_cv=delete_cv_uc,
+        duplicate_cv=duplicate_cv_uc,
+        get_chat=get_chat_uc,
+        append_chat=append_chat_uc,
+        clear_chat=clear_chat_uc,
+        compare_cv=compare_uc,
+        get_cv_history=get_history_uc,
+        restore_snapshot=restore_snapshot_uc,
         register_user=register_user_uc,
         login_user=login_user_uc,
         verify_email_uc=verify_email_uc,

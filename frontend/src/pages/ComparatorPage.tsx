@@ -1,38 +1,62 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { apiListCVs, apiCompareCV, type CV, type CompareResult } from "../lib/api";
 
-const SCORE_DETAILS = [
-  { name: "Habilidades técnicas", key: "skills" },
-  { name: "Experiencia", key: "exp" },
-  { name: "Formación", key: "edu" },
-  { name: "Keywords / ATS", key: "ats" },
-] as const;
+const SUB_SCORE_LABELS: Record<string, string> = {
+  experiencia: "Experiencia",
+  habilidades: "Habilidades técnicas",
+  educacion: "Formación",
+  formato: "Formato / ATS",
+};
 
-const IMPROVEMENTS = [
-  { title: "Agregar keywords de la oferta", category: "ATS Optimization", text: "Tu CV no incluye varias palabras clave requeridas. Agregarlas aumenta la compatibilidad ATS significativamente.", impact: "high" as const, icon: "🎯" },
-  { title: "Incrementar experiencia", category: "Experiencia", text: "Puedes reencuadrar experiencia freelance o proyectos personales para alcanzar el mínimo requerido.", impact: "mid" as const, icon: "📊" },
-  { title: "Agregar sección de testing", category: "Habilidades técnicas", text: "No mencionas experiencia con testing frameworks. Incluye al menos un proyecto donde los hayas usado.", impact: "high" as const, icon: "🧪" },
-  { title: "Mencionar liderazgo técnico", category: "Soft Skills", text: "La oferta busca capacidad de liderazgo. Agrega: tamaño del equipo, metodología, resultados.", impact: "mid" as const, icon: "👥" },
-  { title: "Incluir nivel de inglés", category: "Idiomas", text: "La oferta requiere nivel de inglés. Agrega un nivel CEFR (ej. B2, C1) o resultado de certificación.", impact: "low" as const, icon: "🌐" },
-  { title: "Destacar contribuciones open source", category: "Diferenciador", text: "Si tienes repos activos o PRs contribuidos, destácalo prominentemente.", impact: "low" as const, icon: "⭐" },
-];
+const PRIORITY_LABELS: Record<string, string> = {
+  alta: "Alto impacto",
+  media: "Impacto medio",
+  baja: "Bajo impacto",
+};
 
 export function ComparatorPage() {
-  const [showResults, setShowResults] = useState(false);
+  const navigate = useNavigate();
+  const [cvs, setCvs] = useState<CV[]>([]);
+  const [selectedCvId, setSelectedCvId] = useState("");
   const [offerTitle, setOfferTitle] = useState("");
   const [offerDesc, setOfferDesc] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [loadingCvs, setLoadingCvs] = useState(true);
+  const [error, setError] = useState("");
+  const [results, setResults] = useState<CompareResult | null>(null);
 
-  const runComparison = () => {
-    if (!offerTitle || !offerDesc) return;
-    setShowResults(true);
+  useEffect(() => {
+    apiListCVs()
+      .then((data) => {
+        setCvs(data);
+        if (data.length > 0) setSelectedCvId(data[0].id);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingCvs(false));
+  }, []);
+
+  const runComparison = async () => {
+    if (!selectedCvId || !offerTitle || !offerDesc) return;
+    setLoading(true);
+    setError("");
+    try {
+      const result = await apiCompareCV(selectedCvId, offerTitle, offerDesc);
+      setResults(result);
+    } catch (e: unknown) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetComparison = () => {
-    setShowResults(false);
+    setResults(null);
     setOfferTitle("");
     setOfferDesc("");
   };
 
-  const score = 72;
+  const selectedCv = cvs.find((c) => c.id === selectedCvId);
 
   return (
     <>
@@ -42,121 +66,183 @@ export function ComparatorPage() {
         </div>
       </div>
       <div className="content" style={{ maxWidth: 1100 }}>
-      {!showResults ? (
-        <>
-          <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", marginBottom: 4 }}>Compara tu CV con una oferta</h2>
-          <p style={{ fontSize: 14, color: "var(--muted)", marginBottom: 24 }}>Selecciona tu CV y pega la descripción de la oferta laboral para obtener un análisis de compatibilidad.</p>
+        {!results ? (
+          <>
+            <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", marginBottom: 4 }}>Compara tu CV con una oferta</h2>
+            <p style={{ fontSize: 14, color: "var(--muted)", marginBottom: 24 }}>Selecciona tu CV y pega la descripción de la oferta laboral para obtener un análisis de compatibilidad con AI.</p>
 
-          <div className="input-section">
-            <div className="card">
-              <div className="card-header">
-                <div className="card-title">Tu CV</div>
-                <span className="badge badge-blue">Seleccionado</span>
-              </div>
-              <div className="card-body">
-                <div className="form-group">
-                  <label className="form-label">Seleccionar CV</label>
-                  <select className="form-input">
-                    <option>Seleccioná un CV…</option>
-                  </select>
-                </div>
-                <div style={{ background: "var(--bg)", borderRadius: "var(--radius)", padding: 14, fontSize: 13, color: "var(--muted)", lineHeight: 1.6 }}>
-                  Seleccioná un CV para ver su resumen aquí.
-                </div>
-              </div>
-            </div>
+            {error && <div className="flash flash-error" style={{ marginBottom: 16 }}>{error}</div>}
 
-            <div className="card">
-              <div className="card-header">
-                <div className="card-title">Oferta laboral</div>
-              </div>
-              <div className="card-body">
-                <div className="form-group">
-                  <label className="form-label">Nombre del puesto</label>
-                  <input className="form-input" type="text" placeholder="ej. Senior Frontend Developer" value={offerTitle} onChange={(e) => setOfferTitle(e.target.value)} />
+            <div className="input-section">
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title">Tu CV</div>
+                  {selectedCv && <span className="badge badge-blue">Seleccionado</span>}
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Descripción de la oferta</label>
-                  <textarea className="form-input form-textarea" rows={8} placeholder="Pega aquí la descripción completa de la oferta laboral…" value={offerDesc} onChange={(e) => setOfferDesc(e.target.value)} />
-                </div>
-                <button className="btn btn-primary btn-lg" style={{ width: "100%" }} onClick={runComparison}>Analizar compatibilidad</button>
-              </div>
-            </div>
-          </div>
-        </>
-      ) : (
-        <>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-            <div>
-              <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", marginBottom: 4 }}>Resultado del análisis</h2>
-              <p style={{ fontSize: 14, color: "var(--muted)" }}>CV vs {offerTitle}</p>
-            </div>
-            <button className="btn btn-secondary" onClick={resetComparison}>← Nuevo análisis</button>
-          </div>
-
-          <div className="score-grid">
-            <div className="score-ring-wrap">
-              <div className="score-ring">
-                <svg viewBox="0 0 180 180">
-                  <circle className="score-ring-bg" cx="90" cy="90" r="80" />
-                  <circle className="score-ring-fill" cx="90" cy="90" r="80" stroke={score >= 80 ? "var(--color-success)" : score >= 60 ? "var(--color-warning)" : "var(--color-danger-fg)"} strokeDasharray="502.6" strokeDashoffset={502.6 - (score / 100) * 502.6} />
-                </svg>
-                <div className="score-ring-center">
-                  <div className="score-ring-value">{score}</div>
-                  <div className="score-ring-label">de 100</div>
-                </div>
-              </div>
-              <div className="score-verdict" style={{ color: score >= 80 ? "var(--color-success)" : score >= 60 ? "var(--color-warning)" : "var(--color-danger-fg)" }}>
-                {score >= 80 ? "¡Excelente compatibilidad!" : score >= 60 ? "Buena compatibilidad" : "Necesita mejoras"}
-              </div>
-              <div className="score-subtext">
-                {score >= 80 ? "Tu CV se alinea muy bien con esta oferta." : score >= 60 ? "Cumples la mayoría de requisitos, pero hay áreas de mejora." : "Tu CV no cubre varios requisitos clave."}
-              </div>
-            </div>
-
-            <div className="score-details">
-              {SCORE_DETAILS.map((d) => (
-                <div key={d.key} className="score-detail-card">
-                  <div className="score-detail-header">
-                    <div className="score-detail-name">{d.name}</div>
-                    <div className="score-detail-value">{Math.floor(Math.random() * 40 + 50)}/100</div>
+                <div className="card-body">
+                  <div className="form-group">
+                    <label className="form-label">Seleccionar CV</label>
+                    <select
+                      className="form-input"
+                      value={selectedCvId}
+                      onChange={(e) => setSelectedCvId(e.target.value)}
+                      disabled={loadingCvs}
+                    >
+                      {loadingCvs ? (
+                        <option>Cargando CVs…</option>
+                      ) : cvs.length === 0 ? (
+                        <option>No tenés CVs creados</option>
+                      ) : (
+                        cvs.map((cv) => (
+                          <option key={cv.id} value={cv.id}>{cv.title}</option>
+                        ))
+                      )}
+                    </select>
                   </div>
-                  <div className="score-detail-bar"><div className="score-detail-fill" style={{ width: `${Math.floor(Math.random() * 40 + 50)}%`, background: "var(--accent)" }} /></div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>Puntos que fallan — Mejoras sugeridas</h3>
-          <div className="improvements-grid">
-            {IMPROVEMENTS.map((imp, i) => (
-              <div key={i} className="improvement-card">
-                <div className="improvement-card-header">
-                  <div className={`improvement-icon improvement-icon-${imp.impact}`}>{imp.icon}</div>
-                  <div>
-                    <div className="improvement-title">{imp.title}</div>
-                    <div className="improvement-category">{imp.category}</div>
-                  </div>
-                </div>
-                <div className="improvement-text">{imp.text}</div>
-                <div className="improvement-impact">
-                  <span className={`impact-badge impact-${imp.impact}`}>
-                    {imp.impact === "high" ? "Alto impacto" : imp.impact === "mid" ? "Impacto medio" : "Bajo impacto"}
-                  </span>
+                  {selectedCv && (
+                    <div style={{ background: "var(--bg)", borderRadius: "var(--radius)", padding: 14, fontSize: 13, color: "var(--muted)", lineHeight: 1.6 }}>
+                      <strong>{selectedCv.title}</strong> — Última edición: {new Date(selectedCv.updated_at).toLocaleDateString("es-AR")}
+                    </div>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
 
-          <div className="improve-cta">
-            <div className="improve-cta-text">
-              <h3>¿Querés que el agente AI mejore tu CV?</h3>
-              <p>El asistente puede reescribir secciones, agregar keywords faltantes y optimizar para ATS.</p>
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title">Oferta laboral</div>
+                </div>
+                <div className="card-body">
+                  <div className="form-group">
+                    <label className="form-label">Nombre del puesto</label>
+                    <input className="form-input" type="text" placeholder="ej. Senior Frontend Developer" value={offerTitle} onChange={(e) => setOfferTitle(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Descripción de la oferta</label>
+                    <textarea className="form-input form-textarea" rows={8} placeholder="Pega aquí la descripción completa de la oferta laboral…" value={offerDesc} onChange={(e) => setOfferDesc(e.target.value)} />
+                  </div>
+                  <button
+                    className="btn btn-primary btn-lg"
+                    style={{ width: "100%" }}
+                    onClick={runComparison}
+                    disabled={loading || !selectedCvId || !offerTitle || !offerDesc}
+                  >
+                    {loading ? "Analizando con AI…" : "Analizar compatibilidad"}
+                  </button>
+                </div>
+              </div>
             </div>
-            <button className="btn btn-primary btn-lg">✦ Mejorar CV con AI</button>
-          </div>
-        </>
-      )}
+          </>
+        ) : (
+          <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <div>
+                <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", marginBottom: 4 }}>Resultado del análisis</h2>
+                <p style={{ fontSize: 14, color: "var(--muted)" }}>CV vs {offerTitle}</p>
+              </div>
+              <button className="btn btn-secondary" onClick={resetComparison}>← Nuevo análisis</button>
+            </div>
+
+            <div className="score-grid">
+              <div className="score-ring-wrap">
+                <div className="score-ring">
+                  <svg viewBox="0 0 180 180">
+                    <circle className="score-ring-bg" cx="90" cy="90" r="80" />
+                    <circle
+                      className="score-ring-fill"
+                      cx="90"
+                      cy="90"
+                      r="80"
+                      stroke={results.score >= 80 ? "var(--color-success)" : results.score >= 60 ? "var(--color-warning)" : "var(--color-danger-fg)"}
+                      strokeDasharray="502.6"
+                      strokeDashoffset={502.6 - (results.score / 100) * 502.6}
+                    />
+                  </svg>
+                  <div className="score-ring-center">
+                    <div className="score-ring-value">{results.score}</div>
+                    <div className="score-ring-label">de 100</div>
+                  </div>
+                </div>
+                <div className="score-verdict" style={{ color: results.score >= 80 ? "var(--color-success)" : results.score >= 60 ? "var(--color-warning)" : "var(--color-danger-fg)" }}>
+                  {results.verdict === "excelente" ? "¡Excelente compatibilidad!" : results.verdict === "bueno" ? "Buena compatibilidad" : results.verdict === "regular" ? "Compatibilidad regular" : "Necesita mejoras"}
+                </div>
+                <div className="score-subtext">
+                  {results.score >= 80 ? "Tu CV se alinea muy bien con esta oferta." : results.score >= 60 ? "Cumples la mayoría de requisitos, pero hay áreas de mejora." : "Tu CV no cubre varios requisitos clave."}
+                </div>
+              </div>
+
+              <div className="score-details">
+                {Object.entries(results.sub_scores).map(([key, val]) => (
+                  <div key={key} className="score-detail-card">
+                    <div className="score-detail-header">
+                      <div className="score-detail-name">{SUB_SCORE_LABELS[key] || key}</div>
+                      <div className="score-detail-value">{val}/100</div>
+                    </div>
+                    <div className="score-detail-bar">
+                      <div className="score-detail-fill" style={{ width: `${val}%`, background: val >= 70 ? "var(--color-success)" : val >= 50 ? "var(--color-warning)" : "var(--color-danger-fg)" }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Strengths */}
+            {results.strengths.length > 0 && (
+              <>
+                <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12, marginTop: 24 }}>Fortalezas</h3>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+                  {results.strengths.map((s, i) => (
+                    <span key={i} style={{ background: "rgba(52, 199, 89, 0.1)", color: "var(--color-success)", padding: "6px 12px", borderRadius: 8, fontSize: 13 }}>{s}</span>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Gaps */}
+            {results.gaps.length > 0 && (
+              <>
+                <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>Áreas de mejora</h3>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+                  {results.gaps.map((g, i) => (
+                    <span key={i} style={{ background: "rgba(255, 59, 48, 0.1)", color: "var(--color-danger-fg)", padding: "6px 12px", borderRadius: 8, fontSize: 13 }}>{g}</span>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Improvements */}
+            {results.improvements.length > 0 && (
+              <>
+                <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>Mejoras sugeridas</h3>
+                <div className="improvements-grid">
+                  {results.improvements.map((imp, i) => (
+                    <div key={i} className="improvement-card">
+                      <div className="improvement-card-header">
+                        <div className={`improvement-icon improvement-icon-${imp.priority === "alta" ? "high" : imp.priority === "media" ? "mid" : "low"}`}>✦</div>
+                        <div>
+                          <div className="improvement-title">{imp.title}</div>
+                        </div>
+                      </div>
+                      <div className="improvement-text">{imp.description}</div>
+                      <div className="improvement-impact">
+                        <span className={`impact-badge impact-${imp.priority === "alta" ? "high" : imp.priority === "media" ? "mid" : "low"}`}>
+                          {PRIORITY_LABELS[imp.priority] || imp.priority}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="improve-cta">
+              <div className="improve-cta-text">
+                <h3>¿Querés que el agente AI mejore tu CV?</h3>
+                <p>El asistente puede reescribir secciones, agregar keywords faltantes y optimizar para ATS.</p>
+              </div>
+              <button className="btn btn-primary btn-lg" onClick={() => navigate(`/cv/${selectedCvId}`)}>Ir al Editor</button>
+            </div>
+          </>
+        )}
       </div>
     </>
   );

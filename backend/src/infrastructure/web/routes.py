@@ -7,6 +7,7 @@ from flask import Blueprint, Flask, g, jsonify, request
 
 from ...application.dto import (
     ChatMessageRequest,
+    CompareRequest,
     CreateCVRequest,
     ForgotPasswordRequest,
     LoginRequest,
@@ -111,6 +112,11 @@ def register_routes(
     get_chat: GetChat,
     append_chat: AppendChat,
     clear_chat: ClearChat,
+    # Compare
+    compare_cv=None,
+    # History
+    get_cv_history=None,
+    restore_snapshot=None,
     # Auth
     register_user: RegisterUser,
     login_user: LoginUser,
@@ -374,6 +380,63 @@ def register_routes(
         get_cv.execute(g.user_id, GetCVInput(cv_id=cv_id))
         clear_chat.execute(g.user_id, cv_id)
         return jsonify({"ok": True}), 200
+
+    # ── Compare ───────────────────────────────────────────────────────
+    @api.post("/compare")
+    @require_auth
+    def compare_route():
+        if compare_cv is None:
+            return jsonify({"error": "Comparador no disponible"}), 501
+        body = CompareRequest.model_validate(request.get_json(silent=True) or {})
+        cv = get_cv.execute(g.user_id, GetCVInput(cv_id=body.cv_id))
+        result = compare_cv.execute(
+            cv.context_json, body.job_title, body.job_description
+        )
+        return jsonify({
+            "ok": True,
+            "score": result.score,
+            "verdict": result.verdict,
+            "sub_scores": result.sub_scores,
+            "improvements": result.improvements,
+            "strengths": result.strengths,
+            "gaps": result.gaps,
+        }), 200
+
+    # ── History ───────────────────────────────────────────────────────
+    @api.get("/history")
+    @require_auth
+    def get_history_route():
+        if get_cv_history is None:
+            return jsonify({"ok": True, "entries": []}), 200
+        cv_id_filter = request.args.get("cv_id")
+        event_type_filter = request.args.get("event_type")
+        entries = get_cv_history.execute(
+            g.user_id, cv_id=cv_id_filter, event_type=event_type_filter
+        )
+        return jsonify({
+            "ok": True,
+            "entries": [
+                {
+                    "id": e.id,
+                    "cv_id": e.cv_id,
+                    "event_type": e.event_type,
+                    "title": e.title,
+                    "description": e.description,
+                    "created_at": e.created_at,
+                }
+                for e in entries
+            ],
+        }), 200
+
+    @api.post("/history/<entry_id>/restore")
+    @require_auth
+    def restore_history_route(entry_id: str):
+        if restore_snapshot is None:
+            return jsonify({"error": "Historial no disponible"}), 501
+        snapshot = restore_snapshot.execute(g.user_id, entry_id)
+        if snapshot is None:
+            return jsonify({"error": "Entrada no encontrada o sin snapshot"}), 404
+        return jsonify({"ok": True, "snapshot": snapshot}), 200
 
     app.register_blueprint(api)
 

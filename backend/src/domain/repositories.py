@@ -198,3 +198,49 @@ class TwoFactorPendingRepository(ABC):
     def delete_for_user(self, user_id: str) -> int:
         """Borra todos los pendings del user."""
 
+
+class HistoryEntry:
+    """Entity for history entries."""
+
+    def __init__(
+        self,
+        id: str,
+        user_id: str,
+        cv_id: str,
+        event_type: str,
+        title: str,
+        description: str = "",
+        snapshot: dict | None = None,
+        created_at: datetime | None = None,
+    ) -> None:
+        self.id = id
+        self.user_id = user_id
+        self.cv_id = cv_id
+        self.event_type = event_type
+        self.title = title
+        self.description = description
+        self.snapshot = snapshot
+        self.created_at = created_at or datetime.now(timezone.utc)
+
+
+class HistoryRepository(ABC):
+    """Contrato para el historial de cambios de CVs."""
+
+    @abstractmethod
+    def create(self, entry: HistoryEntry) -> HistoryEntry:
+        """Registra un evento en el historial."""
+
+    @abstractmethod
+    def list_for_user(
+        self, user_id: str, cv_id: str | None = None, event_type: str | None = None
+    ) -> list[HistoryEntry]:
+        """Lista el historial de un usuario, con filtros opcionales."""
+
+    @abstractmethod
+    def get_by_id(self, entry_id: str, user_id: str) -> HistoryEntry | None:
+        """Obtiene una entrada por ID."""
+
+    @abstractmethod
+    def delete_for_cv(self, cv_id: str) -> int:
+        """Borra todo el historial de un CV."""
+

@@ -128,8 +128,9 @@ def _validate_context_json(raw: str) -> str:
 
 
 class CreateCV:
-    def __init__(self, cv_repo: CVRepository) -> None:
+    def __init__(self, cv_repo: CVRepository, history_recorder=None) -> None:
         self._repo = cv_repo
+        self._history_recorder = history_recorder
 
     def execute(self, user_id: str, input: CreateCVInput) -> CVResponse:
         context = input.context_json.strip() if input.context_json else ""
@@ -148,6 +149,19 @@ class CreateCV:
             updated_at=now,
         )
         saved = self._repo.create(cv)
+
+        if self._history_recorder:
+            try:
+                self._history_recorder.execute(
+                    user_id=user_id,
+                    cv_id=saved.id,
+                    event_type="created",
+                    title="CV creado",
+                    description=f"Se creó el CV \"{input.title}\"",
+                )
+            except Exception:
+                log.exception("Failed to record history for CV creation")
+
         return _cv_to_response(saved)
 
 
@@ -170,20 +184,50 @@ class ListCVs:
 
 
 class UpdateCV:
-    def __init__(self, cv_repo: CVRepository) -> None:
+    def __init__(self, cv_repo: CVRepository, history_recorder=None) -> None:
         self._repo = cv_repo
+        self._history_recorder = history_recorder
 
     def execute(self, user_id: str, input: UpdateCVInput) -> CVResponse:
         if input.title is None and input.context_json is None:
             raise ValidationError("body", "Debe enviar al menos title o context_json")
 
         cv = self._repo.get(input.cv_id, user_id)
+
+        # Snapshot before changes (for history)
+        snapshot_before = None
+        if self._history_recorder and input.context_json is not None:
+            try:
+                snapshot_before = json.loads(cv.context_json) if cv.context_json else None
+            except (json.JSONDecodeError, TypeError):
+                snapshot_before = None
+
         if input.title is not None:
             cv.update_title(input.title)
         if input.context_json is not None:
             normalized = _validate_context_json(input.context_json)
             cv.update_context(normalized)
         updated = self._repo.update(cv)
+
+        if self._history_recorder:
+            try:
+                changes = []
+                if input.title is not None:
+                    changes.append("título")
+                if input.context_json is not None:
+                    changes.append("contenido")
+                desc = f"Se actualizó {', '.join(changes)} del CV"
+                self._history_recorder.execute(
+                    user_id=user_id,
+                    cv_id=input.cv_id,
+                    event_type="edited",
+                    title="CV editado",
+                    description=desc,
+                    snapshot=snapshot_before,
+                )
+            except Exception:
+                log.exception("Failed to record history for CV update")
+
         return _cv_to_response(updated)
 
 
@@ -202,8 +246,9 @@ class DuplicateCV:
     ``context_json``. Útil como punto de partida para una variación.
     """
 
-    def __init__(self, cv_repo: CVRepository) -> None:
+    def __init__(self, cv_repo: CVRepository, history_recorder=None) -> None:
         self._repo = cv_repo
+        self._history_recorder = history_recorder
 
     def execute(self, user_id: str, cv_id: str) -> CVResponse:
         source = self._repo.get(cv_id, user_id)  # raises CVNotFoundError si no existe
@@ -217,6 +262,19 @@ class DuplicateCV:
             updated_at=now,
         )
         saved = self._repo.create(new_cv)
+
+        if self._history_recorder:
+            try:
+                self._history_recorder.execute(
+                    user_id=user_id,
+                    cv_id=saved.id,
+                    event_type="duplicated",
+                    title="CV duplicado",
+                    description=f"Copia de \"{source.title}\"",
+                )
+            except Exception:
+                log.exception("Failed to record history for CV duplication")
+
         return _cv_to_response(saved)
 
 

@@ -22,6 +22,7 @@ from .dto import (
     CVResponse,
     ChatMessageRequest,
     ChatMessageResponse,
+    CompareRequest,
 )
 
 __all__ = [

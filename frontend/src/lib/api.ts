@@ -467,3 +467,72 @@ export async function apiClearChat(
   );
   if (!res.ok) throw new Error(await res.text());
 }
+
+// ── Compare ─────────────────────────────────────────────────────────
+
+export type CompareResult = {
+  score: number;
+  verdict: string;
+  sub_scores: Record<string, number>;
+  improvements: Array<{ title: string; description: string; priority: string }>;
+  strengths: string[];
+  gaps: string[];
+};
+
+export async function apiCompareCV(
+  cvId: string,
+  jobTitle: string,
+  jobDescription: string,
+  onSessionExpired?: () => void
+): Promise<CompareResult> {
+  const res = await authedFetch(
+    `${BASE}/api/compare`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cv_id: cvId, job_title: jobTitle, job_description: jobDescription }),
+    },
+    onSessionExpired
+  );
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || "Error al comparar");
+  return body as CompareResult;
+}
+
+// ── History ──────────────────────────────────────────────────────────────
+
+export interface HistoryEntry {
+  id: string;
+  cv_id: string;
+  event_type: "created" | "edited" | "duplicated";
+  title: string;
+  description: string;
+  created_at: string;
+}
+
+export async function apiGetHistory(
+  cvId?: string,
+  onSessionExpired?: () => void
+): Promise<HistoryEntry[]> {
+  const params = new URLSearchParams();
+  if (cvId) params.set("cv_id", cvId);
+  const url = `${BASE}/api/history${params.toString() ? `?${params}` : ""}`;
+  const res = await authedFetch(url, {}, onSessionExpired);
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || "Error al obtener historial");
+  return body.entries ?? [];
+}
+
+export async function apiRestoreHistory(
+  entryId: string,
+  onSessionExpired?: () => void
+): Promise<Record<string, unknown>> {
+  const res = await authedFetch(
+    `${BASE}/api/history/${entryId}/restore`,
+    { method: "POST" },
+    onSessionExpired
+  );
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || "Error al restaurar");
+  return body.snapshot as Record<string, unknown>;
+}

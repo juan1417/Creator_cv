@@ -72,6 +72,15 @@ class ChatMessageRequest(BaseModel):
 class ChatMessageResponse(BaseModel):
     role: str
     content: str
+
+
+# ── Compare ─────────────────────────────────────────────────────────────
+
+
+class CompareRequest(BaseModel):
+    cv_id: str
+    job_title: str
+    job_description: str = Field(min_length=1)
     patch: dict[str, Any] | None = None
     created_at: datetime
 
