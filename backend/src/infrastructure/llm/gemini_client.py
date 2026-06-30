@@ -143,16 +143,22 @@ Reglas:
                 strengths=[str(s) for s in data.get("strengths", [])],
                 gaps=[str(g) for g in data.get("gaps", [])],
             )
-        except Exception:
+        except Exception as e:
             log.exception("Gemini comparison failed")
-            # Return a fallback result
+            error_msg = str(e)
+            if "429" in error_msg or "quota" in error_msg.lower() or "ResourceExhausted" in error_msg:
+                gap = "Cuota de Gemini agotada. Esperá unos minutos."
+            elif "403" in error_msg or "API_KEY_INVALID" in error_msg:
+                gap = "API key de Gemini inválida. Verificá la configuración."
+            else:
+                gap = f"Error: {error_msg[:200]}"
             return ComparisonResult(
                 score=0,
                 verdict="error",
                 sub_scores={"experiencia": 0, "habilidades": 0, "educacion": 0, "formato": 0},
                 improvements=[],
                 strengths=[],
-                gaps=["No se pudo analizar el CV. Verificá la configuración de la API key."],
+                gaps=[gap],
             )
 
     def chat(
@@ -191,9 +197,20 @@ Mensaje del usuario: {message}"""
 
             return ChatResult(response=raw_text, patches=patches)
 
-        except Exception:
+        except Exception as e:
             log.exception("Gemini chat failed")
+            error_msg = str(e)
+            if "429" in error_msg or "quota" in error_msg.lower() or "ResourceExhausted" in error_msg:
+                return ChatResult(
+                    response="Se agotó la cuota gratuita de Gemini. Esperá unos minutos o usá otra API key.",
+                    patches=[],
+                )
+            if "403" in error_msg or "API_KEY_INVALID" in error_msg:
+                return ChatResult(
+                    response="La API key de Gemini no es válida. Verificá la configuración en .env.",
+                    patches=[],
+                )
             return ChatResult(
-                response="No pude procesar tu solicitud. Verificá que la API key de Gemini esté configurada correctamente.",
+                response=f"Error al conectar con la IA: {error_msg[:200]}",
                 patches=[],
             )
